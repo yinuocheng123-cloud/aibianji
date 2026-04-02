@@ -1,0 +1,432 @@
+<!--
+文件说明：该文件实现整木网编辑中台 MVP 的单页界面。
+功能说明：负责展示登录、导航、仪表盘、抓取源、关键词、AI 配置、内容池、编辑审核台与日志。
+
+结构概览：
+  第一部分：登录浮层
+  第二部分：顶部导航与仪表盘
+  第三部分：抓取配置与内容池
+  第四部分：编辑审核工作台
+  第五部分：模板与脚本入口
+-->
+<!DOCTYPE html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>整木网编辑中台 MVP</title>
+    <link rel="stylesheet" href="/styles.css?v=20260401-v10-clean-ui" />
+  </head>
+  <body>
+    <div id="login-overlay" class="login-overlay">
+      <div class="login-card">
+        <div class="login-copy">
+          <p class="eyebrow">整木网</p>
+          <h2>编辑中台登录</h2>
+          <p>本地 MVP 测试账号：</p>
+          <ul class="account-list">
+            <li><code>admin / admin123</code>：管理员</li>
+            <li><code>editor / editor123</code>：编辑</li>
+            <li><code>reviewer / reviewer123</code>：审核员</li>
+            <li><code>viewer / viewer123</code>：查看角色</li>
+          </ul>
+        </div>
+        <form id="login-form" class="login-form">
+          <label>
+            用户名
+            <input id="login-username" type="text" autocomplete="username" value="admin" />
+          </label>
+          <label>
+            密码
+            <input id="login-password" type="password" autocomplete="current-password" value="admin123" />
+          </label>
+          <button type="submit">登录进入中台</button>
+          <p id="login-error" class="form-error"></p>
+        </form>
+      </div>
+    </div>
+
+    <div class="page-shell">
+      <header class="topbar">
+        <div class="brand-lockup">
+          <p class="eyebrow">整木网</p>
+          <h1>编辑中台</h1>
+        </div>
+        <div class="session-panel">
+          <div>
+            <p class="session-label">当前账号</p>
+            <p id="session-summary" class="session-value">未登录</p>
+          </div>
+          <button id="logout-button" class="secondary" type="button">退出登录</button>
+        </div>
+      </header>
+
+      <nav class="feature-nav" aria-label="核心功能导航">
+        <a href="#dashboard">仪表盘</a>
+        <a href="#task-center">抓取任务</a>
+        <a href="#source-management">抓取源</a>
+        <a href="#keyword-management">关键词</a>
+        <a href="#ai-settings">AI 配置</a>
+        <a href="#failure-center">失败日志</a>
+        <a href="#content-pool">内容池</a>
+        <a href="#editor-workbench">编辑审核台</a>
+        <a href="#log-center">操作日志</a>
+      </nav>
+
+      <nav class="dashboard-nav" id="dashboard" aria-label="仪表盘概览">
+        <span class="dashboard-title">编辑中台仪表盘</span>
+        <section class="stats-grid" id="stats-grid"></section>
+      </nav>
+
+      <main class="workspace">
+        <section class="column left-column">
+          <div class="card" id="task-center">
+            <div class="card-head">
+              <h2>抓取任务</h2>
+              <span class="pill">可测试闭环</span>
+            </div>
+            <div class="form-stack">
+              <label>
+                选择抓取源
+                <select id="task-source"></select>
+              </label>
+              <div class="checklist-block">
+                <div class="small-title">选择关键词</div>
+                <div id="task-keyword-list" class="checklist"></div>
+              </div>
+              <button id="run-task-button" type="button">执行抓取任务</button>
+              <p class="field-hint">重复执行相同“抓取源 + 关键词”会触发 URL 去重，方便验证三层去重逻辑。</p>
+            </div>
+            <div id="task-list" class="stack-list compact"></div>
+          </div>
+
+          <div class="card" id="source-management">
+            <div class="card-head">
+              <h2>抓取源管理</h2>
+              <span class="pill">白名单采集</span>
+            </div>
+            <div class="form-stack">
+              <input id="source-id" type="hidden" />
+              <label>
+                源名称
+                <input id="source-name" type="text" placeholder="例如：整木行业观察" />
+              </label>
+              <div class="editor-grid">
+                <label>
+                  域名
+                  <input id="source-domain" type="text" placeholder="brand.example.com" />
+                </label>
+                <label>
+                  源类型
+                  <select id="source-type">
+                    <option value="网站">网站</option>
+                    <option value="自媒体网页">自媒体网页</option>
+                    <option value="手动链接">手动链接</option>
+                  </select>
+                </label>
+              </div>
+              <label>
+                抓取入口 URL
+                <input id="source-entry-url" type="text" placeholder="https://brand.example.com/news" />
+              </label>
+              <div class="editor-grid">
+                <label>
+                  抓取频率
+                  <input id="source-interval" type="text" placeholder="每天 09:00" />
+                </label>
+                <label class="toggle-field">
+                  <span>是否启用</span>
+                  <input id="source-enabled" type="checkbox" checked />
+                </label>
+              </div>
+              <label>
+                正文提取规则
+                <input id="source-parse-rule" type="text" placeholder="article .content-body" />
+              </label>
+              <label>
+                排除规则
+                <input id="source-exclude-rule" type="text" placeholder=".ad,.related-posts" />
+              </label>
+              <div class="toolbar">
+                <button id="preview-source-button" class="secondary" type="button">预览提取效果</button>
+                <button id="save-source-button" type="button">保存抓取源</button>
+                <button id="reset-source-button" class="secondary" type="button">重置表单</button>
+              </div>
+            </div>
+            <div id="source-preview" class="preview-panel hidden">
+              <h3 id="source-preview-title"></h3>
+              <p id="source-preview-meta" class="note-text"></p>
+              <div id="source-preview-body" class="read-box long compact-box"></div>
+            </div>
+            <div id="source-list" class="stack-list"></div>
+          </div>
+
+          <div class="card" id="keyword-management">
+            <div class="card-head">
+              <h2>关键词管理</h2>
+              <span class="pill">栏目绑定</span>
+            </div>
+            <div class="form-stack">
+              <input id="keyword-id" type="hidden" />
+              <label>
+                关键词
+                <input id="keyword-name" type="text" placeholder="例如：整木门墙柜一体化" />
+              </label>
+              <div class="editor-grid">
+                <label>
+                  类型
+                  <select id="keyword-type">
+                    <option value="行业词">行业词</option>
+                    <option value="产品词">产品词</option>
+                    <option value="场景词">场景词</option>
+                    <option value="问题词">问题词</option>
+                    <option value="品牌词">品牌词</option>
+                  </select>
+                </label>
+                <label>
+                  优先级
+                  <input id="keyword-priority" type="number" min="1" max="10" value="8" />
+                </label>
+              </div>
+              <div class="editor-grid">
+                <label>
+                  对应栏目
+                  <select id="keyword-category"></select>
+                </label>
+                <label class="toggle-field">
+                  <span>是否启用</span>
+                  <input id="keyword-enabled" type="checkbox" checked />
+                </label>
+              </div>
+              <label>
+                排除词
+                <input id="keyword-exclude" type="text" placeholder="招聘,促销" />
+              </label>
+              <label>
+                备注
+                <input id="keyword-remark" type="text" placeholder="记录这个词的用途与约束" />
+              </label>
+              <div class="toolbar">
+                <button id="save-keyword-button" type="button">保存关键词</button>
+                <button id="reset-keyword-button" class="secondary" type="button">重置表单</button>
+              </div>
+            </div>
+            <div id="keyword-list" class="stack-list compact"></div>
+          </div>
+
+          <div class="card" id="ai-settings">
+            <div class="card-head">
+              <h2>AI 配置</h2>
+              <span class="pill">管理员后台</span>
+            </div>
+            <div class="form-stack">
+              <p id="ai-settings-status" class="field-hint">当前使用环境变量回退模式</p>
+              <label>
+                DeepSeek API Key（留空则保留现有值）
+                <input id="ai-api-key" type="password" placeholder="sk-..." />
+              </label>
+              <label>
+                Base URL
+                <input id="ai-base-url" type="text" placeholder="https://api.deepseek.com" />
+              </label>
+              <div class="editor-grid">
+                <label>
+                  默认模型
+                  <input id="ai-default-model" type="text" placeholder="deepseek-chat" />
+                </label>
+                <label>
+                  Reasoner 模型
+                  <input id="ai-reasoner-model" type="text" placeholder="deepseek-reasoner" />
+                </label>
+              </div>
+              <div class="editor-grid">
+                <label>
+                  Temperature
+                  <input id="ai-temperature" type="number" step="0.1" min="0" max="2" />
+                </label>
+                <label>
+                  Max Tokens
+                  <input id="ai-max-tokens" type="number" min="128" step="1" />
+                </label>
+              </div>
+              <label>
+                Timeout（毫秒）
+                <input id="ai-timeout" type="number" min="1000" step="1000" />
+              </label>
+              <button id="save-ai-settings-button" type="button">保存 AI 配置</button>
+            </div>
+          </div>
+
+          <div class="card" id="failure-center">
+            <div class="card-head">
+              <h2>抓取失败日志</h2>
+              <span class="pill">正文提取 / 关键词命中</span>
+            </div>
+            <div id="failure-list" class="stack-list compact"></div>
+          </div>
+        </section>
+
+        <section class="column center-column">
+          <div class="card" id="content-pool">
+            <div class="card-head">
+              <h2>内容池</h2>
+              <span class="pill accent">三层去重 + 状态筛选</span>
+            </div>
+            <div class="filter-grid">
+              <label>
+                搜索标题
+                <input id="filter-search" type="text" placeholder="按标题搜索" />
+              </label>
+              <label>
+                状态
+                <select id="filter-status"></select>
+              </label>
+              <label>
+                来源
+                <select id="filter-source"></select>
+              </label>
+              <label>
+                关键词
+                <select id="filter-keyword"></select>
+              </label>
+            </div>
+            <div id="article-list" class="article-list"></div>
+          </div>
+        </section>
+
+        <section class="column right-column">
+          <div class="card detail-card" id="editor-workbench">
+            <div class="card-head">
+              <h2>编辑与审核工作台</h2>
+              <span id="detail-status" class="pill">未选择内容</span>
+            </div>
+
+            <div id="detail-empty" class="empty-state">
+              从内容池选择一篇文章后，这里会展示原文、AI 辅助结果、编辑字段和审核动作。
+            </div>
+
+            <div id="detail-panel" class="detail-panel hidden">
+              <div class="detail-meta">
+                <div>
+                  <span class="label">来源</span>
+                  <p id="detail-source"></p>
+                </div>
+                <div>
+                  <span class="label">原始链接</span>
+                  <a id="detail-url" href="#" target="_blank" rel="noreferrer"></a>
+                </div>
+                <div>
+                  <span class="label">发布时间</span>
+                  <p id="detail-time"></p>
+                </div>
+                <div>
+                  <span class="label">相似度</span>
+                  <p id="detail-similarity"></p>
+                </div>
+              </div>
+
+              <div class="editor-block">
+                <label>原文标题</label>
+                <div id="original-title" class="read-box"></div>
+              </div>
+
+              <div class="editor-block">
+                <label>清洗后正文</label>
+                <div id="clean-text" class="read-box long"></div>
+              </div>
+
+              <div class="ai-actions">
+                <button data-ai-action="summary" type="button">生成摘要</button>
+                <button data-ai-action="title" type="button">生成标题</button>
+                <button data-ai-action="rewrite" type="button">正文改写</button>
+                <button data-ai-action="expand" type="button">扩写稿件</button>
+              </div>
+
+              <div class="editor-block">
+                <label for="new-title">发布标题</label>
+                <input id="new-title" type="text" />
+              </div>
+
+              <div class="editor-block">
+                <label for="summary">摘要</label>
+                <textarea id="summary" rows="3"></textarea>
+              </div>
+
+              <div class="editor-block">
+                <label for="rewritten-content">正文</label>
+                <textarea id="rewritten-content" rows="8"></textarea>
+              </div>
+
+              <div class="editor-grid">
+                <div class="editor-block">
+                  <label for="category">栏目</label>
+                  <select id="category"></select>
+                </div>
+                <div class="editor-block">
+                  <label for="tags">标签</label>
+                  <input id="tags" type="text" />
+                </div>
+              </div>
+
+              <div class="editor-grid">
+                <div class="editor-block">
+                  <label for="seo-title">SEO 标题</label>
+                  <input id="seo-title" type="text" />
+                </div>
+                <div class="editor-block">
+                  <label for="seo-description">SEO 描述</label>
+                  <input id="seo-description" type="text" />
+                </div>
+              </div>
+
+              <div class="editor-block">
+                <label for="source-note">来源说明</label>
+                <textarea id="source-note" rows="2"></textarea>
+              </div>
+
+              <div class="toolbar">
+                <button id="save-button" class="secondary" type="button">保存草稿</button>
+                <button id="submit-button" type="button">提交审核</button>
+              </div>
+
+              <div class="review-box">
+                <h3>审核动作</h3>
+                <textarea id="review-comment" rows="2" placeholder="填写审核意见或发布备注"></textarea>
+                <div class="toolbar">
+                  <button id="approve-button" class="secondary" type="button">审核通过</button>
+                  <button id="reject-button" class="danger" type="button">驳回修改</button>
+                  <button id="publish-button" type="button">通过并发布</button>
+                  <button id="archive-button" class="secondary" type="button">归档</button>
+                </div>
+                <div id="publish-result" class="publish-result"></div>
+              </div>
+
+              <div class="history-box">
+                <h3>AI 与处理记录</h3>
+                <div id="ai-history" class="mini-list"></div>
+              </div>
+            </div>
+          </div>
+
+          <div class="card" id="log-center">
+            <div class="card-head">
+              <h2>操作日志</h2>
+              <span class="pill">可追溯</span>
+            </div>
+            <div id="log-list" class="stack-list compact"></div>
+          </div>
+        </section>
+      </main>
+    </div>
+
+    <template id="stat-template">
+      <article class="stat-card">
+        <p class="stat-label"></p>
+        <p class="stat-value"></p>
+        <p class="stat-hint"></p>
+      </article>
+    </template>
+
+    <script src="/app.js?v=20260401-v10-clean-ui"></script>
+  </body>
+</html>

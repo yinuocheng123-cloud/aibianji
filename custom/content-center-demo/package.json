@@ -1,0 +1,13 @@
+{
+  "name": "content-center-demo",
+  "version": "0.1.0",
+  "private": true,
+  "description": "整木网编辑中台 MVP 本地演示项目",
+  "scripts": {
+    "dev": "node server.js",
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "sql.js": "^1.14.1"
+  }
+}

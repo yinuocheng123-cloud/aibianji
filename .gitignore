@@ -1,0 +1,20 @@
+# 文件说明：该文件定义整木网编辑中台本地仓库的 Git 忽略规则。
+# 功能说明：忽略依赖目录、运行日志、数据库与临时文件，避免把本地运行产物提交进仓库。
+#
+# 结构概览：
+#   第一部分：Node 依赖
+#   第二部分：运行产物
+#   第三部分：系统临时文件
+
+# ========== 第一部分：Node 依赖 ==========
+custom/content-center-demo/node_modules/
+
+# ========== 第二部分：运行产物 ==========
+custom/content-center-demo/data/
+custom/content-center-demo/*.log
+custom/content-center-demo/*.out.log
+npm-debug.log*
+
+# ========== 第三部分：系统临时文件 ==========
+Thumbs.db
+.DS_Store
