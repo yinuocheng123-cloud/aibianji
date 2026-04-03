@@ -433,6 +433,30 @@ function createApiRouter({ sessions, store, aiService, crawlService }) {
       return;
     }
 
+    if (request.method === "POST" && /^\/api\/articles\/\d+\/keep-suspected$/.test(pathname)) {
+      if (!requireRole(user, response, [ROLES.ADMIN, ROLES.EDITOR, ROLES.REVIEWER])) {
+        return;
+      }
+
+      const [, articleId] = pathname.match(/^\/api\/articles\/(\d+)\/keep-suspected$/);
+      const article = getArticleOrFail(articleId, response);
+      if (!article) {
+        return;
+      }
+
+      if (article.duplicateStatus !== DUPLICATE_STATUS.SUSPECTED) {
+        sendJson(response, 400, { message: "当前文章不是疑似重复状态" });
+        return;
+      }
+
+      article.duplicateStatus = DUPLICATE_STATUS.PASSED;
+      article.updatedAt = nowText();
+      store.appendLog(LOG_TYPES.REVIEW, `文章 ${article.id} 的疑似重复标记已由 ${user.displayName} 手动保留。`);
+      store.saveState();
+      sendJson(response, 200, buildBootstrapPayload(user));
+      return;
+    }
+
     if (request.method === "POST" && /^\/api\/articles\/\d+\/review$/.test(pathname)) {
       if (!requireRole(user, response, [ROLES.ADMIN, ROLES.REVIEWER])) {
         return;

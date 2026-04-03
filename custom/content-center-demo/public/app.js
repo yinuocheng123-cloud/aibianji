@@ -145,6 +145,7 @@ const elements = {
   aiHistory: document.querySelector("#ai-history"),
   saveButton: document.querySelector("#save-button"),
   submitButton: document.querySelector("#submit-button"),
+  keepDuplicateButton: document.querySelector("#keep-duplicate-button"),
   approveButton: document.querySelector("#approve-button"),
   rejectButton: document.querySelector("#reject-button"),
   publishButton: document.querySelector("#publish-button"),
@@ -189,6 +190,10 @@ function isEditorRole() {
 
 function isReviewerRole() {
   return ["admin", "reviewer"].includes(appState.sessionUser?.role);
+}
+
+function canDecideDuplicate() {
+  return ["admin", "editor", "reviewer"].includes(appState.sessionUser?.role);
 }
 
 function isAdminRole() {
@@ -619,11 +624,13 @@ function renderLogs() {
 
 function renderDetail() {
   const article = getSelectedArticle();
+  const { duplicateStatus } = getStatusEnums();
   if (!article) {
     elements.detailEmpty.classList.remove("hidden");
     elements.detailPanel.classList.add("hidden");
     elements.detailStatus.textContent = "未选择内容";
     elements.publishResult.textContent = "";
+    elements.keepDuplicateButton.classList.add("hidden");
     return;
   }
 
@@ -648,6 +655,10 @@ function renderDetail() {
   elements.publishResult.textContent = article.portalUrl
     ? `已发布：${article.portalUrl}（主站 ID：${article.portalArticleId}）`
     : "";
+  elements.keepDuplicateButton.classList.toggle(
+    "hidden",
+    !(article.duplicateStatus === duplicateStatus.SUSPECTED && canDecideDuplicate())
+  );
 
   renderCategoryOptions();
 
@@ -670,6 +681,7 @@ function renderDetail() {
   });
   elements.saveButton.disabled = editorDisabled;
   elements.submitButton.disabled = editorDisabled;
+  elements.keepDuplicateButton.disabled = !canDecideDuplicate();
   elements.reviewComment.disabled = reviewerDisabled;
   elements.approveButton.disabled = reviewerDisabled;
   elements.rejectButton.disabled = reviewerDisabled;
@@ -953,6 +965,18 @@ async function submitForReview() {
   refreshData(payload);
 }
 
+async function keepSuspectedDuplicate() {
+  const article = getSelectedArticle();
+  if (!article) {
+    return;
+  }
+
+  const payload = await request(`/api/articles/${article.id}/keep-suspected`, {
+    method: "POST"
+  });
+  refreshData(payload);
+}
+
 async function reviewArticle(action) {
   const article = getSelectedArticle();
   if (!article) {
@@ -1023,6 +1047,9 @@ function bindEvents() {
   });
   elements.submitButton.addEventListener("click", () => {
     submitForReview().catch((error) => window.alert(error.message));
+  });
+  elements.keepDuplicateButton.addEventListener("click", () => {
+    keepSuspectedDuplicate().catch((error) => window.alert(error.message));
   });
   elements.approveButton.addEventListener("click", () => {
     reviewArticle("approve").catch((error) => window.alert(error.message));

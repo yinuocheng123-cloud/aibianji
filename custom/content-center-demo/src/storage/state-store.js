@@ -226,6 +226,21 @@ function repairFixtureRecord(record, fixture, fields) {
   return needsRepair ? { ...record, ...fixture } : record;
 }
 
+function inferKeepSuspectedDuplicates(task) {
+  if (typeof task.keepSuspectedDuplicates === "boolean") {
+    return task.keepSuspectedDuplicates;
+  }
+
+  const logText = String(task.logText || "");
+  if (logText.includes("疑似重复保留：关闭")) {
+    return false;
+  }
+  if (logText.includes("疑似重复保留：开启")) {
+    return true;
+  }
+  return true;
+}
+
 function createDefaultState() {
   return {
     users: [
@@ -355,7 +370,8 @@ function mergeState(rawState) {
     keywordIds: Array.isArray(task.keywordIds) ? task.keywordIds.map(Number) : [],
     taskType: !task.taskType || looksCorrupted(task.taskType) ? "手动抓取" : task.taskType,
     status: normalizeByRules(task.status, TASK_STATUS_RULES, TASK_STATUS.RUNNING),
-    logText: looksCorrupted(task.logText) ? "任务已执行，请查看最新抓取结果。" : task.logText
+    logText: looksCorrupted(task.logText) ? "任务已执行，请查看最新抓取结果。" : task.logText,
+    keepSuspectedDuplicates: inferKeepSuspectedDuplicates(task)
   }));
 
   nextState.articles = nextState.articles
@@ -692,7 +708,8 @@ function createStateStore() {
       successCount: Number(row.success_count),
       failCount: Number(row.fail_count),
       duplicateCount: Number(row.duplicate_count),
-      logText: row.log_text
+      logText: row.log_text,
+      keepSuspectedDuplicates: inferKeepSuspectedDuplicates({ logText: row.log_text })
     }));
 
     const articleKeywordMap = new Map();

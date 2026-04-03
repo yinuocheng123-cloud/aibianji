@@ -17,6 +17,7 @@ const ADMIN_PASSWORD = process.env.SMOKE_ADMIN_PASSWORD || "admin123";
 const REVIEWER_USERNAME = process.env.SMOKE_REVIEWER_USERNAME || "reviewer";
 const REVIEWER_PASSWORD = process.env.SMOKE_REVIEWER_PASSWORD || "reviewer123";
 const KEEP_SUSPECTED_DUPLICATES = process.env.SMOKE_KEEP_SUSPECTED_DUPLICATES !== "0";
+const RETAIN_SUSPECTED_AFTER_CREATE = process.env.SMOKE_RETAIN_SUSPECTED_AFTER_CREATE !== "0";
 
 function createStamp() {
   return `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
@@ -146,6 +147,25 @@ async function runSmoke() {
   assert.ok(aiArticle, "AI 摘要后未找到测试文章");
   assert.ok(Array.isArray(aiArticle.aiHistory) && aiArticle.aiHistory.length >= 1, "AI 历史未记录");
 
+  let retainedArticle = aiArticle;
+  let retainedSuspected = false;
+  if (
+    RETAIN_SUSPECTED_AFTER_CREATE &&
+    aiArticle.duplicateStatus === aiSummary.payload.statusEnums.duplicateStatus.SUSPECTED
+  ) {
+    const keepResult = await adminClient.request(`/api/articles/${article.id}/keep-suspected`, {
+      method: "POST"
+    });
+    retainedArticle = getArticleByKeyword(keepResult.payload.articles, keywordText);
+    assert.ok(retainedArticle, "人工保留疑似重复后未找到测试文章");
+    assert.strictEqual(
+      retainedArticle.duplicateStatus,
+      keepResult.payload.statusEnums.duplicateStatus.PASSED,
+      "人工保留后疑似重复状态未改为通过"
+    );
+    retainedSuspected = true;
+  }
+
   const saveDraft = await adminClient.request(`/api/articles/${article.id}/save`, {
     method: "POST",
     body: {
@@ -213,12 +233,13 @@ async function runSmoke() {
   console.log(JSON.stringify({
     baseUrl: BASE_URL,
     keepSuspectedDuplicates: KEEP_SUSPECTED_DUPLICATES,
+    retainedSuspected,
     previewStatus: preview.status,
     previewFallback: preview.payload.preview?.isFallback,
     sourceId: source.id,
     keywordId: keyword.id,
     articleId: article.id,
-    duplicateStatus: article.duplicateStatus,
+    duplicateStatus: retainedArticle.duplicateStatus,
     aiHistoryCount: aiArticle.aiHistory.length,
     savedStatus: savedArticle.status,
     submittedStatus: submittedArticle.status,
