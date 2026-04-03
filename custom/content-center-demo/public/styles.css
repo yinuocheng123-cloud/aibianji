@@ -508,6 +508,11 @@ textarea {
   width: auto;
 }
 
+.task-option {
+  margin-top: -2px;
+  color: var(--text);
+}
+
 .article-item {
   cursor: pointer;
   transition: border-color 0.2s ease, box-shadow 0.2s ease, transform 0.2s ease;

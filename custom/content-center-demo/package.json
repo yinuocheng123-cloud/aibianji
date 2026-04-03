@@ -5,7 +5,8 @@
   "description": "整木网编辑中台 MVP 本地演示项目",
   "scripts": {
     "dev": "node server.js",
-    "start": "node server.js"
+    "start": "node server.js",
+    "smoke:e2e": "node scripts/smoke-e2e.js"
   },
   "dependencies": {
     "sql.js": "^1.14.1"

@@ -345,7 +345,14 @@ function createApiRouter({ sessions, store, aiService, crawlService }) {
 
       const body = await readRequestBody(request);
       try {
-        await crawlService.runTask(Number(body.sourceId), Array.isArray(body.keywordIds) ? body.keywordIds.map(Number) : [], user.displayName);
+        await crawlService.runTask(
+          Number(body.sourceId),
+          Array.isArray(body.keywordIds) ? body.keywordIds.map(Number) : [],
+          user.displayName,
+          {
+            keepSuspectedDuplicates: body.keepSuspectedDuplicates !== false
+          }
+        );
         sendJson(response, 200, buildBootstrapPayload(user));
       } catch (error) {
         sendJson(response, 400, { message: error.message });

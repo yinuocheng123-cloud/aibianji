@@ -374,10 +374,11 @@ function createCrawlService({ store }) {
   }
 
   // ========== 第三部分：抓取任务执行 ==========
-  async function runTask(sourceId, keywordIds, operatorName) {
+  async function runTask(sourceId, keywordIds, operatorName, options = {}) {
     const state = store.getState();
     const source = state.sourceSites.find((item) => item.id === Number(sourceId));
     const keywordList = state.keywords.filter((item) => keywordIds.includes(Number(item.id)) && item.enabled);
+    const keepSuspectedDuplicates = options.keepSuspectedDuplicates !== false;
 
     if (!source) {
       throw new Error("抓取源不存在");
@@ -393,6 +394,7 @@ function createCrawlService({ store }) {
       sourceName: source.name,
       keywordIds: keywordList.map((item) => item.id),
       taskType: "手动抓取",
+      keepSuspectedDuplicates,
       status: TASK_STATUS.RUNNING,
       startTime: nowText(),
       endTime: "",
@@ -402,7 +404,7 @@ function createCrawlService({ store }) {
       logText: ""
     };
 
-    const taskLogs = [];
+    const taskLogs = [`疑似重复保留：${keepSuspectedDuplicates ? "开启" : "关闭"}`];
     for (const keyword of keywordList) {
       let article = null;
       let usedFallback = false;
@@ -446,6 +448,13 @@ function createCrawlService({ store }) {
         task.duplicateCount += 1;
         keyword.hitCount += 1;
         taskLogs.push(`关键词“${keyword.keyword}”命中重复：${duplicateResult.reason}`);
+        continue;
+      }
+
+      if (duplicateResult.duplicateStatus === DUPLICATE_STATUS.SUSPECTED && !keepSuspectedDuplicates) {
+        task.duplicateCount += 1;
+        keyword.hitCount += 1;
+        taskLogs.push(`关键词“${keyword.keyword}”命中疑似重复且已按配置跳过：${duplicateResult.reason}`);
         continue;
       }
 

@@ -76,6 +76,7 @@ const elements = {
   statsGrid: document.querySelector("#stats-grid"),
   taskSource: document.querySelector("#task-source"),
   taskKeywordList: document.querySelector("#task-keyword-list"),
+  taskKeepSuspected: document.querySelector("#task-keep-suspected"),
   runTaskButton: document.querySelector("#run-task-button"),
   taskList: document.querySelector("#task-list"),
   sourceId: document.querySelector("#source-id"),
@@ -342,6 +343,7 @@ function renderTasks() {
         <div class="meta-row">
           <span>${escapeHtml(task.sourceName)}</span>
           <span>${escapeHtml(task.taskType)}</span>
+          <span>${task.keepSuspectedDuplicates === false ? "疑似重复跳过" : "疑似重复保留"}</span>
           <span>新增 ${task.successCount}</span>
           <span>重复 ${task.duplicateCount}</span>
           <span>失败 ${task.failCount || 0}</span>
@@ -679,6 +681,7 @@ function renderPermissions() {
   const adminDisabled = !isAdminRole();
   [
     elements.taskSource,
+    elements.taskKeepSuspected,
     elements.runTaskButton,
     elements.sourceName,
     elements.sourceDomain,
@@ -892,7 +895,8 @@ async function runTask() {
     method: "POST",
     body: JSON.stringify({
       sourceId: Number(elements.taskSource.value),
-      keywordIds
+      keywordIds,
+      keepSuspectedDuplicates: elements.taskKeepSuspected.checked
     })
   });
 

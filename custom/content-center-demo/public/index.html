@@ -94,8 +94,12 @@
                 <div class="small-title">选择关键词</div>
                 <div id="task-keyword-list" class="checklist"></div>
               </div>
+              <label class="check-item task-option">
+                <input id="task-keep-suspected" type="checkbox" checked />
+                <span>保留疑似重复</span>
+              </label>
               <button id="run-task-button" type="button">执行抓取任务</button>
-              <p class="field-hint">重复执行相同“抓取源 + 关键词”会触发 URL 去重，方便验证三层去重逻辑。</p>
+              <p class="field-hint">重复执行相同“抓取源 + 关键词”会触发 URL 去重。关闭“保留疑似重复”后，相似度 60%-79% 的线索会被直接跳过。</p>
             </div>
             <div id="task-list" class="stack-list compact"></div>
           </div>
