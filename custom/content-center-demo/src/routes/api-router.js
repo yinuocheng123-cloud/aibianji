@@ -112,6 +112,35 @@ function createApiRouter({ sessions, store, aiService, crawlService }) {
     return article;
   }
 
+  function normalizeDraftText(value) {
+    return String(value ?? "").trim();
+  }
+
+  function normalizeTagList(value) {
+    const rawList = Array.isArray(value) ? value : String(value || "").split(/[，,]/);
+    return Array.from(new Set(rawList.map((item) => normalizeDraftText(item)).filter(Boolean)));
+  }
+
+  function applyArticleDraft(article, draftBody) {
+    const fieldNames = ["newTitle", "summary", "rewrittenContent", "seoTitle", "seoDescription", "sourceNote"];
+    fieldNames.forEach((field) => {
+      if (draftBody[field] !== undefined) {
+        article[field] = normalizeDraftText(draftBody[field]);
+      }
+    });
+
+    if (draftBody.tags !== undefined) {
+      article.tags = normalizeTagList(draftBody.tags);
+    }
+
+    if (draftBody.recommendedCategoryId !== undefined) {
+      const nextCategoryId = Number(draftBody.recommendedCategoryId);
+      article.recommendedCategoryId = Number.isFinite(nextCategoryId) && nextCategoryId > 0
+        ? nextCategoryId
+        : (article.recommendedCategoryId || 1);
+    }
+  }
+
   // ========== 第二部分：Bootstrap 与配置接口 ==========
   async function handleApi(request, response, urlObject) {
     const pathname = urlObject.pathname;
@@ -197,6 +226,7 @@ function createApiRouter({ sessions, store, aiService, crawlService }) {
             publishTime: "",
             extractionMode: "失败兜底 / 原始响应摘要",
             rawText: responsePreview,
+            responsePreview,
             cleanText: responsePreview || "未能获取可用正文，请检查入口 URL、网络连通性或正文提取规则。",
             isFallback: true,
             errorMessage: error.message
@@ -366,11 +396,7 @@ function createApiRouter({ sessions, store, aiService, crawlService }) {
       }
 
       const body = await readRequestBody(request);
-      ["newTitle", "summary", "rewrittenContent", "tags", "seoTitle", "seoDescription", "sourceNote", "recommendedCategoryId"].forEach((field) => {
-        if (body[field] !== undefined) {
-          article[field] = body[field];
-        }
-      });
+      applyArticleDraft(article, body);
       article.status = ARTICLE_STATUS.EDITING;
       article.assignedEditor = user.displayName;
       article.updatedAt = nowText();

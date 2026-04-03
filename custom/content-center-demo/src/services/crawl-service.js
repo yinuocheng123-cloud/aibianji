@@ -330,8 +330,14 @@ function createCrawlService({ store }) {
   function createSimulatedArticle(source, keyword, operatorName) {
     const crawlTime = nowText();
     const categoryName = store.getCategoryName(keyword.categoryId);
-    const cleanText = `${keyword.keyword}相关动作正在从概念讨论转向更明确的落地阶段。来源站点 ${source.name} 当前重点讨论 ${categoryName} 方向的工厂动作、品牌策略与交付效率变化。对整木网来说，这类线索适合进入编辑内容池并进一步改写。`;
-    const title = `${keyword.keyword}正在成为整木行业新的观察切口`;
+    const traceCode = `${source.id}-${keyword.id}`;
+    const title = `${keyword.keyword}线索进入整木网${categoryName}观察池`;
+    const cleanText = [
+      `白名单来源 ${source.name} 本轮围绕“${keyword.keyword}”出现了一条新的公开线索，当前先以模拟抓取的方式进入整木网编辑中台。`,
+      `这条线索的追踪编号为 ${traceCode}，讨论重点集中在 ${keyword.keyword} 对设计前置、工厂排产、交付节拍和门店协同效率的影响。`,
+      `与常规行业快讯相比，“${keyword.keyword}”更适合落到 ${categoryName} 栏目，因为它同时具备业务动作、读者价值和后续改写空间。`,
+      `后续编辑可以继续围绕 ${keyword.keyword} 的应用场景、品牌动作、实施难点和落地收益做二次改写，并保留来源 ${source.name} 与原始链接追溯信息。`
+    ].join(" ");
 
     return {
       id: createId(),
@@ -351,12 +357,12 @@ function createCrawlService({ store }) {
       assignedEditor: operatorName,
       reviewer: "",
       newTitle: title,
-      summary: `${keyword.keyword}已出现可供整木网编辑跟进的公开线索，可进入内容池进一步处理。`,
-      rewrittenContent: "该线索目前已完成清洗和基础归纳，建议编辑从“行业变化、业务动作、读者价值”三个方向继续改写。",
-      tags: [keyword.keyword, categoryName],
-      seoTitle: `${keyword.keyword}成为整木行业新观察切口`,
-      seoDescription: `围绕 ${keyword.keyword} 整理整木行业最新公开线索与编辑切入点。`,
-      sourceNote: `来源 ${source.name}，原始链接已保留，抓取时间 ${crawlTime}。`,
+      summary: `关键词“${keyword.keyword}”已生成一条新的模拟公开线索，可进入内容池继续编辑与审核。`,
+      rewrittenContent: `围绕 ${keyword.keyword} 的公开讨论正在形成更明确的业务动作，这条线索已被整理为 ${categoryName} 方向的待处理稿件，建议继续补充品牌案例、实施细节和读者价值。`,
+      tags: [keyword.keyword, categoryName, `线索${traceCode}`],
+      seoTitle: `${keyword.keyword}进入整木网${categoryName}观察池`,
+      seoDescription: `整木网围绕 ${keyword.keyword} 生成新的模拟公开线索，供编辑继续改写为 ${categoryName} 栏目稿件。`,
+      sourceNote: `来源 ${source.name}，原始链接已保留，抓取时间 ${crawlTime}，线索编号 ${traceCode}。`,
       reviewComment: "",
       aiHistory: [],
       publishStatus: PUBLISH_STATUS.UNPUBLISHED,

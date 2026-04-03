@@ -72,6 +72,7 @@ const server = http.createServer(async (request, response) => {
 
     serveStaticFile(request, response, urlObject);
   } catch (error) {
+    console.error("[content-center-error]", error);
     sendJson(response, 500, {
       message: "服务内部错误",
       detail: error.message

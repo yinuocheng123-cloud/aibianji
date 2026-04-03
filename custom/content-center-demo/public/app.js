@@ -9,37 +9,36 @@
  */
 
 // ========== 第一部分：状态与基础工具 ==========
-const ARTICLE_STATUS = {
-  PENDING_REVIEW: "待审核",
-  EDITING: "编辑中",
-  PENDING_APPROVAL: "待复审",
-  APPROVED: "已通过",
-  PUBLISHED: "已发布",
-  ARCHIVED: "已归档",
-  REJECTED: "已驳回"
+const DEFAULT_STATUS_ENUMS = {
+  articleStatus: {
+    PENDING_REVIEW: "待审核",
+    EDITING: "编辑中",
+    PENDING_APPROVAL: "待复审",
+    APPROVED: "已通过",
+    PUBLISHED: "已发布",
+    ARCHIVED: "已归档",
+    REJECTED: "已驳回"
+  },
+  publishStatus: {
+    UNPUBLISHED: "未发布",
+    PENDING: "待发布",
+    PUBLISHED: "已发布"
+  },
+  duplicateStatus: {
+    PASSED: "通过",
+    SUSPECTED: "疑似重复",
+    DUPLICATE: "重复"
+  }
 };
 
-const PUBLISH_STATUS = {
-  UNPUBLISHED: "未发布",
-  PENDING: "待发布",
-  PUBLISHED: "已发布"
-};
-
-const DUPLICATE_STATUS = {
-  PASSED: "通过",
-  SUSPECTED: "疑似重复",
-  DUPLICATE: "重复"
-};
-
-const STATUS_FILTER_OPTIONS = [
-  { value: "", label: "全部状态" },
-  { value: ARTICLE_STATUS.PENDING_REVIEW, label: ARTICLE_STATUS.PENDING_REVIEW },
-  { value: ARTICLE_STATUS.EDITING, label: ARTICLE_STATUS.EDITING },
-  { value: ARTICLE_STATUS.PENDING_APPROVAL, label: ARTICLE_STATUS.PENDING_APPROVAL },
-  { value: ARTICLE_STATUS.APPROVED, label: ARTICLE_STATUS.APPROVED },
-  { value: ARTICLE_STATUS.PUBLISHED, label: ARTICLE_STATUS.PUBLISHED },
-  { value: ARTICLE_STATUS.ARCHIVED, label: ARTICLE_STATUS.ARCHIVED },
-  { value: ARTICLE_STATUS.REJECTED, label: ARTICLE_STATUS.REJECTED }
+const STATUS_FILTER_ORDER = [
+  "PENDING_REVIEW",
+  "EDITING",
+  "PENDING_APPROVAL",
+  "APPROVED",
+  "PUBLISHED",
+  "ARCHIVED",
+  "REJECTED"
 ];
 
 const appState = {
@@ -53,6 +52,7 @@ const appState = {
   logs: [],
   crawlFailures: [],
   aiSettings: null,
+  statusEnums: DEFAULT_STATUS_ENUMS,
   sourcePreview: null,
   selectedArticleId: null,
   editingSourceId: null,
@@ -198,6 +198,23 @@ function getLatestFailureForSource(sourceId) {
   return appState.crawlFailures.find((item) => Number(item.sourceId) === Number(sourceId)) || null;
 }
 
+function getStatusEnums() {
+  return appState.statusEnums || DEFAULT_STATUS_ENUMS;
+}
+
+function getStatusFilterOptions() {
+  const { articleStatus } = getStatusEnums();
+  return [
+    { value: "", label: "全部状态" },
+    ...STATUS_FILTER_ORDER
+      .filter((key) => articleStatus[key])
+      .map((key) => ({
+        value: articleStatus[key],
+        label: articleStatus[key]
+      }))
+  ];
+}
+
 // ========== 第二部分：会话与渲染函数 ==========
 function showLogin() {
   elements.loginOverlay.classList.remove("hidden");
@@ -245,6 +262,7 @@ async function logout() {
   appState.logs = [];
   appState.crawlFailures = [];
   appState.aiSettings = null;
+  appState.statusEnums = DEFAULT_STATUS_ENUMS;
   appState.sourcePreview = null;
   appState.selectedArticleId = null;
   renderAll();
@@ -387,20 +405,29 @@ function renderSourcePreview() {
 
   const preview = appState.sourcePreview;
   const metaParts = [];
+  const responsePreview = String(preview.responsePreview || "").trim();
   if (preview.publishTime) {
     metaParts.push(preview.publishTime);
   }
   if (preview.extractionMode) {
     metaParts.push(preview.extractionMode);
   }
+  if (preview.isFallback) {
+    metaParts.push("失败兜底展示");
+  }
   if (preview.errorMessage) {
     metaParts.push(preview.errorMessage);
+  }
+
+  let bodyText = preview.cleanText || preview.rawText || responsePreview || "暂无可展示内容";
+  if (preview.isFallback && responsePreview && !bodyText.includes(responsePreview)) {
+    bodyText = `${bodyText}\n\n原始响应摘要：\n${responsePreview}`;
   }
 
   elements.sourcePreview.classList.remove("hidden");
   elements.sourcePreviewTitle.textContent = preview.title || "未识别标题";
   elements.sourcePreviewMeta.textContent = metaParts.join(" / ");
-  elements.sourcePreviewBody.textContent = preview.cleanText || preview.rawText || "暂无可展示内容";
+  elements.sourcePreviewBody.textContent = bodyText;
 }
 
 function renderKeywords() {
@@ -495,7 +522,7 @@ function renderFailures() {
 }
 
 function renderFilterOptions() {
-  elements.filterStatus.innerHTML = STATUS_FILTER_OPTIONS
+  elements.filterStatus.innerHTML = getStatusFilterOptions()
     .map((item) => `<option value="${item.value}">${item.label}</option>`)
     .join("");
   elements.filterSource.innerHTML = [
@@ -523,13 +550,14 @@ function getFilteredArticles() {
 }
 
 function getStatusClass(article) {
-  if (article.status === ARTICLE_STATUS.REJECTED) {
+  const { articleStatus, duplicateStatus } = getStatusEnums();
+  if (article.status === articleStatus.REJECTED) {
     return "danger";
   }
-  if ([ARTICLE_STATUS.APPROVED, ARTICLE_STATUS.PUBLISHED, ARTICLE_STATUS.ARCHIVED].includes(article.status)) {
+  if ([articleStatus.APPROVED, articleStatus.PUBLISHED, articleStatus.ARCHIVED].includes(article.status)) {
     return "good";
   }
-  if (article.duplicateStatus !== DUPLICATE_STATUS.PASSED) {
+  if (article.duplicateStatus !== duplicateStatus.PASSED) {
     return "warn";
   }
   return "";
@@ -720,6 +748,7 @@ function resetKeywordForm() {
 
 function refreshData(payload) {
   const previousSelectedArticleId = appState.selectedArticleId;
+  const payloadStatusEnums = payload.statusEnums || {};
   appState.sessionUser = payload.sessionUser || null;
   appState.dashboard = payload.dashboard || null;
   appState.sourceSites = payload.sourceSites || [];
@@ -730,6 +759,11 @@ function refreshData(payload) {
   appState.logs = payload.logs || [];
   appState.crawlFailures = payload.crawlFailures || [];
   appState.aiSettings = payload.aiSettings || null;
+  appState.statusEnums = {
+    articleStatus: { ...DEFAULT_STATUS_ENUMS.articleStatus, ...(payloadStatusEnums.articleStatus || {}) },
+    publishStatus: { ...DEFAULT_STATUS_ENUMS.publishStatus, ...(payloadStatusEnums.publishStatus || {}) },
+    duplicateStatus: { ...DEFAULT_STATUS_ENUMS.duplicateStatus, ...(payloadStatusEnums.duplicateStatus || {}) }
+  };
   appState.selectedArticleId = appState.articles.some((item) => item.id === previousSelectedArticleId)
     ? previousSelectedArticleId
     : appState.articles[0]?.id || null;
