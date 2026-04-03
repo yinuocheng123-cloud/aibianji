@@ -15,7 +15,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>整木网编辑中台 MVP</title>
-    <link rel="stylesheet" href="/styles.css?v=20260403-v11-mvp-testable" />
+    <link rel="stylesheet" href="/styles.css?v=20260403-v12-login-fix" />
   </head>
   <body>
     <div id="login-overlay" class="login-overlay">
@@ -99,7 +99,9 @@
                 <span>保留疑似重复</span>
               </label>
               <button id="run-task-button" type="button">执行抓取任务</button>
-              <p class="field-hint">重复执行相同“抓取源 + 关键词”会触发 URL 去重。关闭“保留疑似重复”后，相似度 60%-79% 的线索会被直接跳过。</p>
+              <p class="field-hint">
+                重复执行相同“抓取源 + 关键词”会触发 URL 去重。关闭“保留疑似重复”后，相似度 60%-79% 的线索会被直接跳过。
+              </p>
             </div>
             <div id="task-list" class="stack-list compact"></div>
           </div>
@@ -432,6 +434,6 @@
       </article>
     </template>
 
-    <script src="/app.js?v=20260403-v11-mvp-testable"></script>
+    <script src="/app.js?v=20260403-v12-login-fix"></script>
   </body>
 </html>
