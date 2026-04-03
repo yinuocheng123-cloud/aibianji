@@ -449,11 +449,106 @@ function createApiRouter({ sessions, store, aiService, crawlService }) {
         return;
       }
 
+      const body = await readRequestBody(request);
+      const reason = String(body.comment || "").trim();
+      if (!reason) {
+        sendJson(response, 400, { message: "请填写保留疑似稿理由" });
+        return;
+      }
+
       article.duplicateStatus = DUPLICATE_STATUS.PASSED;
+      article.reviewComment = reason;
       article.updatedAt = nowText();
-      store.appendLog(LOG_TYPES.REVIEW, `文章 ${article.id} 的疑似重复标记已由 ${user.displayName} 手动保留。`);
+      store.appendLog(LOG_TYPES.REVIEW, `文章 ${article.id} 的疑似重复标记已由 ${user.displayName} 手动保留。理由：${reason}`);
       store.saveState();
       sendJson(response, 200, buildBootstrapPayload(user));
+      return;
+    }
+
+    if (request.method === "POST" && pathname === "/api/testing/cleanup") {
+      if (!requireRole(user, response, [ROLES.ADMIN])) {
+        return;
+      }
+
+      const body = await readRequestBody(request);
+      const matchText = String(body.matchText || "").trim();
+      if (!matchText) {
+        sendJson(response, 400, { message: "缺少清理匹配文本" });
+        return;
+      }
+
+      const state = store.getState();
+      const articleIds = new Set(
+        state.articles
+          .filter((article) => [article.originalTitle, article.originalUrl, article.sourceName, ...(article.hitKeywords || []), ...(article.tags || []), article.sourceNote]
+            .some((text) => String(text || "").includes(matchText)))
+          .map((article) => article.id)
+      );
+      const sourceIds = new Set(
+        state.sourceSites
+          .filter((source) => [source.name, source.domain, source.entryUrl, source.lastResult].some((text) => String(text || "").includes(matchText)))
+          .map((source) => source.id)
+      );
+      const keywordIds = new Set(
+        state.keywords
+          .filter((keyword) => [keyword.keyword, keyword.remark, keyword.excludeWords].some((text) => String(text || "").includes(matchText)))
+          .map((keyword) => keyword.id)
+      );
+      const taskIds = new Set(
+        state.tasks
+          .filter((task) => [task.taskName, task.sourceName, task.logText].some((text) => String(text || "").includes(matchText)))
+          .map((task) => task.id)
+      );
+
+      const removed = {
+        sources: 0,
+        keywords: 0,
+        tasks: 0,
+        articles: 0,
+        failures: 0,
+        logs: 0
+      };
+
+      const nextSources = state.sourceSites.filter((source) => !sourceIds.has(source.id));
+      removed.sources = state.sourceSites.length - nextSources.length;
+      state.sourceSites = nextSources;
+
+      const nextKeywords = state.keywords.filter((keyword) => !keywordIds.has(keyword.id));
+      removed.keywords = state.keywords.length - nextKeywords.length;
+      state.keywords = nextKeywords;
+
+      const nextTasks = state.tasks.filter((task) => !taskIds.has(task.id));
+      removed.tasks = state.tasks.length - nextTasks.length;
+      state.tasks = nextTasks;
+
+      const nextArticles = state.articles.filter((article) => !articleIds.has(article.id));
+      removed.articles = state.articles.length - nextArticles.length;
+      state.articles = nextArticles;
+
+      const nextFailures = state.crawlFailures.filter((failure) => (
+        !taskIds.has(failure.taskId)
+        && !sourceIds.has(failure.sourceId)
+        && !keywordIds.has(failure.keywordId)
+        && !String(failure.sourceName || "").includes(matchText)
+        && !String(failure.keyword || "").includes(matchText)
+        && !String(failure.message || "").includes(matchText)
+      ));
+      removed.failures = state.crawlFailures.length - nextFailures.length;
+      state.crawlFailures = nextFailures;
+
+      const nextLogs = state.logs.filter((log) => !String(log.message || "").includes(matchText));
+      removed.logs = state.logs.length - nextLogs.length;
+      state.logs = nextLogs;
+      store.appendLog(
+        LOG_TYPES.CONFIG,
+        `${user.displayName} 清理了本地 smoke 测试数据，共移除 ${removed.sources} 个抓取源、${removed.keywords} 个关键词、${removed.tasks} 个任务、${removed.articles} 篇文章。`
+      );
+      store.saveState();
+      sendJson(response, 200, {
+        ok: true,
+        removed,
+        matchText
+      });
       return;
     }
 

@@ -971,8 +971,16 @@ async function keepSuspectedDuplicate() {
     return;
   }
 
+  const reason = elements.reviewComment.value.trim();
+  if (!reason) {
+    throw new Error("请先填写保留疑似稿理由");
+  }
+
   const payload = await request(`/api/articles/${article.id}/keep-suspected`, {
-    method: "POST"
+    method: "POST",
+    body: JSON.stringify({
+      comment: reason
+    })
   });
   refreshData(payload);
 }

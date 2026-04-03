@@ -1,11 +1,12 @@
 /**
  * 文件说明：该文件实现整木网编辑中台 MVP 的本地端到端回归脚本。
- * 功能说明：负责串联登录、预览、抓取、AI、保存、提审与发布，快速验证主流程是否可用。
+ * 功能说明：负责串联登录、预览、抓取、AI、保存、提审、发布与可选清理，
+ *           用于快速验证主工作流在当前版本下是否可用。
  *
  * 结构概览：
  *   第一部分：环境参数与基础工具
- *   第二部分：接口请求与断言
- *   第三部分：主流程回归执行
+ *   第二部分：会话请求与断言工具
+ *   第三部分：主流程执行
  */
 
 const assert = require("assert");
@@ -18,12 +19,12 @@ const REVIEWER_USERNAME = process.env.SMOKE_REVIEWER_USERNAME || "reviewer";
 const REVIEWER_PASSWORD = process.env.SMOKE_REVIEWER_PASSWORD || "reviewer123";
 const KEEP_SUSPECTED_DUPLICATES = process.env.SMOKE_KEEP_SUSPECTED_DUPLICATES !== "0";
 const RETAIN_SUSPECTED_AFTER_CREATE = process.env.SMOKE_RETAIN_SUSPECTED_AFTER_CREATE !== "0";
+const CLEANUP_AFTER_RUN = process.env.SMOKE_CLEANUP === "1";
 
 function createStamp() {
   return `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 }
 
-// ========== 第二部分：接口请求与断言 ==========
 function createSessionClient() {
   let cookie = "";
 
@@ -62,13 +63,14 @@ function getArticleByKeyword(articleList, keyword) {
   return (articleList || []).find((item) => Array.isArray(item.hitKeywords) && item.hitKeywords.includes(keyword));
 }
 
-// ========== 第三部分：主流程回归执行 ==========
+// ========== 第二部分：主流程执行 ==========
 async function runSmoke() {
   const adminClient = createSessionClient();
   const reviewerClient = createSessionClient();
   const stamp = createStamp();
   const sourceName = `联调源-${stamp}`;
   const keywordText = `case-${stamp}`;
+  const retainReason = `保留疑似稿，人工复核结果正常：${stamp}`;
 
   const adminLogin = await adminClient.request("/api/auth/login", {
     method: "POST",
@@ -82,10 +84,10 @@ async function runSmoke() {
   const preview = await adminClient.request("/api/sources/preview", {
     method: "POST",
     body: {
-      name: "预览测试源",
-      domain: "preview.invalid",
+      name: `预览测试源-${stamp}`,
+      domain: `preview-${stamp}.invalid`,
       sourceType: "网站",
-      entryUrl: "https://preview.invalid/article",
+      entryUrl: `https://preview-${stamp}.invalid/article`,
       parseRule: "article .content-body",
       excludeRule: ".ad,.recommend"
     },
@@ -154,7 +156,10 @@ async function runSmoke() {
     aiArticle.duplicateStatus === aiSummary.payload.statusEnums.duplicateStatus.SUSPECTED
   ) {
     const keepResult = await adminClient.request(`/api/articles/${article.id}/keep-suspected`, {
-      method: "POST"
+      method: "POST",
+      body: {
+        comment: retainReason
+      }
     });
     retainedArticle = getArticleByKeyword(keepResult.payload.articles, keywordText);
     assert.ok(retainedArticle, "人工保留疑似重复后未找到测试文章");
@@ -163,6 +168,7 @@ async function runSmoke() {
       keepResult.payload.statusEnums.duplicateStatus.PASSED,
       "人工保留后疑似重复状态未改为通过"
     );
+    assert.strictEqual(retainedArticle.reviewComment, retainReason, "保留疑似稿理由未正确回写");
     retainedSuspected = true;
   }
 
@@ -195,10 +201,6 @@ async function runSmoke() {
     "提交复审后状态不正确"
   );
 
-  await adminClient.request("/api/auth/logout", {
-    method: "POST"
-  });
-
   const reviewerLogin = await reviewerClient.request("/api/auth/login", {
     method: "POST",
     body: {
@@ -230,9 +232,24 @@ async function runSmoke() {
   assert.ok(publishedArticle.portalArticleId, "发布后未回写主站文章 ID");
   assert.ok(publishedArticle.portalUrl, "发布后未回写主站 URL");
 
+  let cleanup = null;
+  if (CLEANUP_AFTER_RUN) {
+    const cleanupResult = await adminClient.request("/api/testing/cleanup", {
+      method: "POST",
+      body: {
+        matchText: stamp
+      }
+    });
+    cleanup = cleanupResult.payload;
+    assert.strictEqual(cleanupResult.status, 200, "清理模式执行失败");
+    assert.strictEqual(cleanup?.ok, true, "清理接口未返回成功结果");
+  }
+
   console.log(JSON.stringify({
     baseUrl: BASE_URL,
     keepSuspectedDuplicates: KEEP_SUSPECTED_DUPLICATES,
+    retainSuspectedAfterCreate: RETAIN_SUSPECTED_AFTER_CREATE,
+    cleanupAfterRun: CLEANUP_AFTER_RUN,
     retainedSuspected,
     previewStatus: preview.status,
     previewFallback: preview.payload.preview?.isFallback,
@@ -247,6 +264,7 @@ async function runSmoke() {
     publishStatus: publishedArticle.publishStatus,
     portalArticleId: publishedArticle.portalArticleId,
     portalUrl: publishedArticle.portalUrl,
+    cleanup,
     latestLog: publishReview.payload.logs?.[0]?.message || ""
   }, null, 2));
 }
