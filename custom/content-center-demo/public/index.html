@@ -15,7 +15,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>整木网编辑中台 MVP</title>
-    <link rel="stylesheet" href="/styles.css?v=20260403-v13-login-fallback" />
+    <link rel="stylesheet" href="/styles.css?v=20260403-v15-login-form-names" />
   </head>
   <body>
     <div id="login-overlay" class="login-overlay">
@@ -34,11 +34,11 @@
         <form id="login-form" class="login-form" method="post" action="/api/auth/login">
           <label>
             用户名
-            <input id="login-username" type="text" autocomplete="username" value="admin" />
+            <input id="login-username" name="username" type="text" autocomplete="username" value="admin" />
           </label>
           <label>
             密码
-            <input id="login-password" type="password" autocomplete="current-password" value="admin123" />
+            <input id="login-password" name="password" type="password" autocomplete="current-password" value="admin123" />
           </label>
           <button type="submit">登录进入中台</button>
           <p id="login-error" class="form-error"></p>
@@ -434,6 +434,6 @@
       </article>
     </template>
 
-    <script src="/app.js?v=20260403-v13-login-fallback"></script>
+    <script src="/app.js?v=20260403-v15-login-form-names"></script>
   </body>
 </html>

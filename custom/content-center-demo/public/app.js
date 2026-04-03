@@ -245,27 +245,8 @@ function applyLoginQueryState() {
   window.history.replaceState(null, "", window.location.pathname);
 }
 
-async function handleLoginSubmit(event) {
-  event.preventDefault();
+function handleLoginSubmit() {
   elements.loginError.textContent = "";
-
-  try {
-    const payload = await request(
-      "/api/auth/login",
-      {
-        method: "POST",
-        body: JSON.stringify({
-          username: elements.loginUsername.value.trim(),
-          password: elements.loginPassword.value
-        })
-      },
-      true
-    );
-    hideLogin();
-    refreshData(payload);
-  } catch (error) {
-    elements.loginError.textContent = error.message;
-  }
 }
 
 async function logout() {
