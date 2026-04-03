@@ -233,6 +233,18 @@ function hideLogin() {
   document.body.classList.remove("overlay-open");
 }
 
+function applyLoginQueryState() {
+  const query = new URLSearchParams(window.location.search);
+  const loginError = query.get("login_error");
+  if (!loginError) {
+    return;
+  }
+
+  elements.loginError.textContent = loginError === "invalid_credentials" ? "用户名或密码错误" : "登录失败，请重试";
+  showLogin();
+  window.history.replaceState(null, "", window.location.pathname);
+}
+
 async function handleLoginSubmit(event) {
   event.preventDefault();
   elements.loginError.textContent = "";
@@ -1075,6 +1087,7 @@ function bindEvents() {
 
 async function initialize() {
   bindEvents();
+  applyLoginQueryState();
   resetSourceForm();
   resetKeywordForm();
 

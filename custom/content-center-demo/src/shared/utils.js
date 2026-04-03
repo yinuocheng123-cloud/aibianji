@@ -63,7 +63,23 @@ function readRequestBody(request) {
       }
 
       try {
-        resolve(JSON.parse(body));
+        const contentType = String(request.headers["content-type"] || "").toLowerCase();
+        if (contentType.includes("application/json")) {
+          resolve(JSON.parse(body));
+          return;
+        }
+
+        if (contentType.includes("application/x-www-form-urlencoded")) {
+          resolve(Object.fromEntries(new URLSearchParams(body).entries()));
+          return;
+        }
+
+        try {
+          resolve(JSON.parse(body));
+          return;
+        } catch (error) {
+          resolve(Object.fromEntries(new URLSearchParams(body).entries()));
+        }
       } catch (error) {
         reject(error);
       }

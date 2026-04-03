@@ -15,7 +15,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>整木网编辑中台 MVP</title>
-    <link rel="stylesheet" href="/styles.css?v=20260403-v12-login-fix" />
+    <link rel="stylesheet" href="/styles.css?v=20260403-v13-login-fallback" />
   </head>
   <body>
     <div id="login-overlay" class="login-overlay">
@@ -31,7 +31,7 @@
             <li><code>viewer / viewer123</code>：查看角色</li>
           </ul>
         </div>
-        <form id="login-form" class="login-form">
+        <form id="login-form" class="login-form" method="post" action="/api/auth/login">
           <label>
             用户名
             <input id="login-username" type="text" autocomplete="username" value="admin" />
@@ -434,6 +434,6 @@
       </article>
     </template>
 
-    <script src="/app.js?v=20260403-v12-login-fix"></script>
+    <script src="/app.js?v=20260403-v13-login-fallback"></script>
   </body>
 </html>

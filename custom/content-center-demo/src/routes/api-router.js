@@ -32,6 +32,11 @@ const {
 
 // ========== 第一部分：会话与通用响应 ==========
 function createApiRouter({ sessions, store, aiService, crawlService }) {
+  function isHtmlFormRequest(request) {
+    const contentType = String(request.headers["content-type"] || "").toLowerCase();
+    return contentType.includes("application/x-www-form-urlencoded");
+  }
+
   function getCurrentUser(request) {
     const cookies = parseCookies(request);
     const token = cookies[SESSION_COOKIE];
@@ -147,11 +152,18 @@ function createApiRouter({ sessions, store, aiService, crawlService }) {
 
     if (request.method === "POST" && pathname === "/api/auth/login") {
       const body = await readRequestBody(request);
+      const formLogin = isHtmlFormRequest(request);
       const username = String(body.username || "").trim();
       const password = String(body.password || "");
       const user = store.getState().users.find((item) => item.username === username && item.status === "enabled");
+      const loginFailed = !user || user.passwordHash !== sha256(password);
+      if (formLogin && loginFailed) {
+        response.writeHead(302, { Location: "/?login_error=invalid_credentials" });
+        response.end();
+        return;
+      }
 
-      if (!user || user.passwordHash !== sha256(password)) {
+      if (loginFailed) {
         sendJson(response, 401, { message: "用户名或密码错误" });
         return;
       }
@@ -159,6 +171,14 @@ function createApiRouter({ sessions, store, aiService, crawlService }) {
       const token = crypto.randomUUID();
       sessions.set(token, { userId: user.id, createdAt: Date.now() });
       store.appendLog(LOG_TYPES.LOGIN, `${user.displayName} 登录系统。`);
+      if (formLogin) {
+        response.writeHead(302, {
+          Location: "/",
+          "Set-Cookie": toSetCookie(token)
+        });
+        response.end();
+        return;
+      }
       sendJson(response, 200, buildBootstrapPayload(user), { "Set-Cookie": toSetCookie(token) });
       return;
     }
