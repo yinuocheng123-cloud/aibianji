@@ -156,12 +156,17 @@ const SEED_SOURCE_FIXTURES = {
   }
 };
 
-const SEED_CATEGORY_FIXTURES = {
-  1: "整木快讯",
-  2: "整木智造",
-  3: "整木材料",
-  4: "品牌观察"
-};
+const SIMULATED_PORTAL_CATEGORIES = [
+  { id: 1, name: "行业资讯", portalCategoryId: 401 },
+  { id: 2, name: "企业资讯", portalCategoryId: 402 },
+  { id: 3, name: "市场动态", portalCategoryId: 403 }
+];
+
+const LEGACY_PORTAL_CATEGORY_NAMES = new Set(["整木快讯", "整木智造", "整木材料", "品牌观察"]);
+
+const SEED_CATEGORY_FIXTURES = Object.fromEntries(
+  SIMULATED_PORTAL_CATEGORIES.map((category) => [category.id, category.name])
+);
 
 const SEED_KEYWORD_FIXTURES = {
   101: {
@@ -241,6 +246,37 @@ function inferKeepSuspectedDuplicates(task) {
   return true;
 }
 
+function shouldUseSimulatedPortalCategories(categories) {
+  if (!Array.isArray(categories) || !categories.length) {
+    return true;
+  }
+
+  const categoryNames = categories
+    .map((category) => String(category.name || "").trim())
+    .filter(Boolean);
+
+  if (!categoryNames.length) {
+    return true;
+  }
+
+  return categoryNames.every((name) => looksCorrupted(name) || LEGACY_PORTAL_CATEGORY_NAMES.has(name));
+}
+
+function normalizePortalCategories(categories) {
+  if (shouldUseSimulatedPortalCategories(categories)) {
+    return SIMULATED_PORTAL_CATEGORIES.map((category) => ({ ...category }));
+  }
+
+  return categories.map((category) => {
+    const fixture = SIMULATED_PORTAL_CATEGORIES.find((item) => item.id === Number(category.id));
+    return {
+      ...category,
+      name: looksCorrupted(category.name) && SEED_CATEGORY_FIXTURES[category.id] ? SEED_CATEGORY_FIXTURES[category.id] : category.name,
+      portalCategoryId: Number(category.portalCategoryId) || Number(fixture?.portalCategoryId || 401)
+    };
+  });
+}
+
 function createDefaultState() {
   return {
     users: [
@@ -265,12 +301,7 @@ function createDefaultState() {
         updatedAt: "2026-04-01 08:00:00"
       }
     ],
-    categories: [
-      { id: 1, name: "整木快讯", portalCategoryId: 301 },
-      { id: 2, name: "整木智造", portalCategoryId: 302 },
-      { id: 3, name: "整木材料", portalCategoryId: 303 },
-      { id: 4, name: "品牌观察", portalCategoryId: 304 }
-    ],
+    categories: SIMULATED_PORTAL_CATEGORIES.map((category) => ({ ...category })),
     keywords: [
       { id: 101, keyword: "整木定制", keywordType: KEYWORD_TYPES.INDUSTRY, priority: 10, categoryId: 1, enabled: true, excludeWords: "招聘,培训", remark: "重点追踪整木行业趋势", hitCount: 1, createdAt: "2026-04-01 08:10:00", updatedAt: "2026-04-01 08:10:00" },
       { id: 102, keyword: "智能开料", keywordType: KEYWORD_TYPES.PRODUCT, priority: 8, categoryId: 2, enabled: true, excludeWords: "二手", remark: "关注设备与产线升级", hitCount: 1, createdAt: "2026-04-01 08:10:00", updatedAt: "2026-04-01 08:10:00" }
@@ -351,15 +382,15 @@ function mergeState(rawState) {
     }))
     .map((source) => repairFixtureRecord(source, SEED_SOURCE_FIXTURES[source.id], ["name", "sourceType", "crawlInterval", "lastResult"]));
 
-  nextState.categories = nextState.categories.map((category) => ({
-    ...category,
-    name: looksCorrupted(category.name) && SEED_CATEGORY_FIXTURES[category.id] ? SEED_CATEGORY_FIXTURES[category.id] : category.name
-  }));
+  nextState.categories = normalizePortalCategories(nextState.categories);
+  const validCategoryIds = new Set(nextState.categories.map((category) => Number(category.id)));
+  const defaultCategoryId = Number(nextState.categories[0]?.id || 1);
 
   nextState.keywords = nextState.keywords
     .map((keyword) => ({
       ...keyword,
       keywordType: normalizeByRules(keyword.keywordType, KEYWORD_TYPE_RULES, KEYWORD_TYPES.INDUSTRY),
+      categoryId: validCategoryIds.has(Number(keyword.categoryId)) ? Number(keyword.categoryId) : defaultCategoryId,
       excludeWords: looksCorrupted(keyword.excludeWords) ? "" : keyword.excludeWords,
       remark: looksCorrupted(keyword.remark) ? "" : keyword.remark
     }))
@@ -385,6 +416,9 @@ function mergeState(rawState) {
             type: normalizeByRules(history.type, AI_HISTORY_TYPE_RULES, history.type || "摘要")
           }))
         : [],
+      recommendedCategoryId: validCategoryIds.has(Number(article.recommendedCategoryId))
+        ? Number(article.recommendedCategoryId)
+        : defaultCategoryId,
       duplicateStatus: normalizeByRules(article.duplicateStatus, DUPLICATE_STATUS_RULES, DUPLICATE_STATUS.PASSED),
       status: normalizeByRules(article.status, ARTICLE_STATUS_RULES, ARTICLE_STATUS.PENDING_REVIEW),
       publishStatus: normalizeByRules(article.publishStatus, PUBLISH_STATUS_RULES, PUBLISH_STATUS.UNPUBLISHED),

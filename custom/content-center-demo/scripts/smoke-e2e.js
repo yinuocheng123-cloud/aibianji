@@ -20,6 +20,13 @@ const REVIEWER_PASSWORD = process.env.SMOKE_REVIEWER_PASSWORD || "reviewer123";
 const KEEP_SUSPECTED_DUPLICATES = process.env.SMOKE_KEEP_SUSPECTED_DUPLICATES !== "0";
 const RETAIN_SUSPECTED_AFTER_CREATE = process.env.SMOKE_RETAIN_SUSPECTED_AFTER_CREATE !== "0";
 const CLEANUP_AFTER_RUN = process.env.SMOKE_CLEANUP === "1";
+const TEST_ALL_PORTAL_CATEGORIES = process.env.SMOKE_TEST_ALL_CATEGORIES === "1";
+const TARGET_CATEGORY_ID = Number(process.env.SMOKE_CATEGORY_ID || 2);
+const SIMULATED_PORTAL_CATEGORY_TARGETS = {
+  1: { name: "行业资讯", pathSegment: "industry" },
+  2: { name: "企业资讯", pathSegment: "enterprise" },
+  3: { name: "市场动态", pathSegment: "market" }
+};
 
 function createStamp() {
   return `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
@@ -63,13 +70,13 @@ function getArticleByKeyword(articleList, keyword) {
   return (articleList || []).find((item) => Array.isArray(item.hitKeywords) && item.hitKeywords.includes(keyword));
 }
 
-// ========== 第二部分：主流程执行 ==========
-async function runSmoke() {
+async function runScenario(targetCategoryId) {
+  const portalTarget = SIMULATED_PORTAL_CATEGORY_TARGETS[targetCategoryId] || SIMULATED_PORTAL_CATEGORY_TARGETS[2];
   const adminClient = createSessionClient();
   const reviewerClient = createSessionClient();
   const stamp = createStamp();
-  const sourceName = `联调源-${stamp}`;
-  const keywordText = `case-${stamp}`;
+  const sourceName = `联调源-${portalTarget.pathSegment}-${stamp}`;
+  const keywordText = `case-${portalTarget.pathSegment}-${stamp}`;
   const retainReason = `保留疑似稿，人工复核结果正常：${stamp}`;
 
   const adminLogin = await adminClient.request("/api/auth/login", {
@@ -122,7 +129,7 @@ async function runSmoke() {
       keyword: keywordText,
       keywordType: "产品词",
       priority: 6,
-      categoryId: 2,
+      categoryId: targetCategoryId,
       enabled: true,
       excludeWords: "",
       remark: "本地回归脚本自动创建"
@@ -182,13 +189,14 @@ async function runSmoke() {
       seoTitle: `${keywordText} SEO 标题`,
       seoDescription: `${keywordText} SEO 描述`,
       sourceNote: "联调来源说明",
-      recommendedCategoryId: 2
+      recommendedCategoryId: targetCategoryId
     }
   });
   const savedArticle = getArticleByKeyword(saveDraft.payload.articles, keywordText);
   assert.ok(savedArticle, "保存草稿后未找到测试文章");
   assert.strictEqual(savedArticle.status, saveDraft.payload.statusEnums.articleStatus.EDITING, "保存草稿后状态不正确");
   assert.ok(Array.isArray(savedArticle.tags), "保存草稿后的标签应为数组");
+  assert.strictEqual(savedArticle.recommendedCategoryId, targetCategoryId, "保存草稿后的目标栏目不正确");
 
   const submitReview = await adminClient.request(`/api/articles/${article.id}/submit`, {
     method: "POST"
@@ -231,6 +239,18 @@ async function runSmoke() {
   );
   assert.ok(publishedArticle.portalArticleId, "发布后未回写主站文章 ID");
   assert.ok(publishedArticle.portalUrl, "发布后未回写主站 URL");
+  assert.ok(
+    publishedArticle.portalArticleId.startsWith(`zmw-${400 + targetCategoryId}-`),
+    "发布后主站文章 ID 未按模拟栏目生成"
+  );
+  assert.ok(
+    publishedArticle.portalUrl.includes(`/zixun/${portalTarget.pathSegment}/`),
+    "发布后主站 URL 未按模拟栏目路径生成"
+  );
+  assert.ok(
+    (publishReview.payload.logs?.[0]?.message || "").includes(`整木网${portalTarget.name}`),
+    "发布日志未明确写出模拟栏目名称"
+  );
 
   let cleanup = null;
   if (CLEANUP_AFTER_RUN) {
@@ -245,11 +265,10 @@ async function runSmoke() {
     assert.strictEqual(cleanup?.ok, true, "清理接口未返回成功结果");
   }
 
-  console.log(JSON.stringify({
-    baseUrl: BASE_URL,
-    keepSuspectedDuplicates: KEEP_SUSPECTED_DUPLICATES,
-    retainSuspectedAfterCreate: RETAIN_SUSPECTED_AFTER_CREATE,
-    cleanupAfterRun: CLEANUP_AFTER_RUN,
+  return {
+    targetCategoryId,
+    targetCategoryName: portalTarget.name,
+    targetPathSegment: portalTarget.pathSegment,
     retainedSuspected,
     previewStatus: preview.status,
     previewFallback: preview.payload.preview?.isFallback,
@@ -266,6 +285,27 @@ async function runSmoke() {
     portalUrl: publishedArticle.portalUrl,
     cleanup,
     latestLog: publishReview.payload.logs?.[0]?.message || ""
+  };
+}
+
+// ========== 第二部分：主流程执行 ==========
+async function runSmoke() {
+  const categoryIds = TEST_ALL_PORTAL_CATEGORIES
+    ? Object.keys(SIMULATED_PORTAL_CATEGORY_TARGETS).map(Number)
+    : [TARGET_CATEGORY_ID];
+
+  const scenarios = [];
+  for (const categoryId of categoryIds) {
+    scenarios.push(await runScenario(categoryId));
+  }
+
+  console.log(JSON.stringify({
+    baseUrl: BASE_URL,
+    keepSuspectedDuplicates: KEEP_SUSPECTED_DUPLICATES,
+    retainSuspectedAfterCreate: RETAIN_SUSPECTED_AFTER_CREATE,
+    cleanupAfterRun: CLEANUP_AFTER_RUN,
+    testAllPortalCategories: TEST_ALL_PORTAL_CATEGORIES,
+    scenarios
   }, null, 2));
 }
 

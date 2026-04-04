@@ -150,6 +150,7 @@ const elements = {
   approveButton: document.querySelector("#approve-button"),
   rejectButton: document.querySelector("#reject-button"),
   publishButton: document.querySelector("#publish-button"),
+  directForwardButton: null,
   archiveButton: document.querySelector("#archive-button"),
   statTemplate: document.querySelector("#stat-template")
 };
@@ -185,6 +186,24 @@ async function request(url, options = {}, allowUnauthorized = false) {
   return result;
 }
 
+function reportClientEvent(type, message, extra = {}) {
+  const payload = {
+    type,
+    message: String(message || ""),
+    url: window.location.href,
+    userAgent: navigator.userAgent,
+    ...extra
+  };
+
+  fetch("/api/client-events", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    credentials: "same-origin",
+    keepalive: true,
+    body: JSON.stringify(payload)
+  }).catch(() => {});
+}
+
 function escapeHtml(text) {
   return String(text || "")
     .replaceAll("&", "&amp;")
@@ -194,6 +213,14 @@ function escapeHtml(text) {
 
 function getSelectedArticle() {
   return appState.articles.find((item) => item.id === appState.selectedArticleId) || null;
+}
+
+function getCategoryById(categoryId) {
+  return appState.categories.find((item) => Number(item.id) === Number(categoryId)) || null;
+}
+
+function getCategoryName(categoryId) {
+  return getCategoryById(categoryId)?.name || "行业资讯";
 }
 
 function isEditorRole() {
@@ -233,14 +260,203 @@ function getStatusFilterOptions() {
   ];
 }
 
+function upsertHint(container, className, text, position = "afterbegin") {
+  if (!container) {
+    return null;
+  }
+
+  let node = container.querySelector(`.${className}`);
+  if (!node) {
+    node = document.createElement("p");
+    node.className = `field-hint ${className}`;
+    if (position === "beforeend") {
+      container.append(node);
+    } else {
+      container.prepend(node);
+    }
+  }
+
+  node.textContent = text;
+  return node;
+}
+
+function ensureSourceTypeOption(select, value, label) {
+  if (!select || Array.from(select.options).some((option) => option.value === value)) {
+    return;
+  }
+
+  const option = document.createElement("option");
+  option.value = value;
+  option.textContent = label;
+  select.append(option);
+}
+
+function ensureDirectForwardButton() {
+  if (elements.directForwardButton) {
+    return elements.directForwardButton;
+  }
+
+  const toolbar = elements.saveButton?.parentElement;
+  if (!toolbar) {
+    return null;
+  }
+
+  const button = document.createElement("button");
+  button.id = "direct-forward-button";
+  button.type = "button";
+  button.textContent = "直接转发到整木网资讯栏目";
+  toolbar.prepend(button);
+  elements.directForwardButton = button;
+  return button;
+}
+
+function configureFrontstageLayout() {
+  document.querySelectorAll('a[href="#ai-settings"], a[href="#failure-center"]').forEach((node) => node.remove());
+  ["ai-settings", "failure-center"].forEach((id) => {
+    const section = document.querySelector(`#${id}`);
+    if (!section) {
+      return;
+    }
+    section.classList.add("hidden");
+    section.hidden = true;
+    section.style.display = "none";
+  });
+
+  ensureSourceTypeOption(elements.sourceType, "公众号主页", "公众号主页");
+  ensureSourceTypeOption(elements.sourceType, "公众号文章", "公众号文章");
+
+  upsertHint(
+    document.querySelector("#task-center .form-stack"),
+    "task-structure-hint",
+    "抓取任务由“抓取对象 + 关键词”组成，抓取对象可以是网站、公众号页面、公众号文章或手动录入链接。"
+  );
+  upsertHint(
+    document.querySelector("#source-management .form-stack"),
+    "source-structure-hint",
+    "抓取源就是抓取对象，可按白名单持续新增、编辑和停用；当前演示重点是网站与公众号公开内容线索。"
+  );
+  upsertHint(
+    document.querySelector("#keyword-management .form-stack"),
+    "keyword-structure-hint",
+    "关键词管理支持按行业词、产品词、场景词等维度增减维护，并与整木网资讯栏目建立推荐映射。"
+  );
+  upsertHint(
+    document.querySelector("#content-pool"),
+    "content-pool-hint",
+    "内容池展示已抓取入库的文章线索。当前整木网先模拟 3 个资讯栏目：行业资讯、企业资讯、市场动态。选中后可直接转发，也可以先用 AI 编辑后再转发。",
+    "beforeend"
+  );
+
+  const taskPill = document.querySelector("#task-center .pill");
+  if (taskPill) {
+    taskPill.textContent = "关键词 + 抓取对象";
+  }
+
+  const sourcePill = document.querySelector("#source-management .pill");
+  if (sourcePill) {
+    sourcePill.textContent = "抓取对象可增减";
+  }
+
+  const keywordPill = document.querySelector("#keyword-management .pill");
+  if (keywordPill) {
+    keywordPill.textContent = "关键词可增减";
+  }
+
+  const poolPill = document.querySelector("#content-pool .pill");
+  if (poolPill) {
+    poolPill.textContent = "直接转发 / AI 编辑后转发";
+  }
+
+  const categoryLabel = document.querySelector('label[for="category"]');
+  if (categoryLabel) {
+    categoryLabel.textContent = "整木网资讯栏目";
+  }
+
+  if (elements.detailEmpty) {
+    elements.detailEmpty.textContent = "从内容池选择一篇文章后，这里会展示原文、AI 辅助结果、整木网资讯栏目选择和转发动作为主的工作流。";
+  }
+
+  if (elements.saveButton) {
+    elements.saveButton.textContent = "保存 AI 编辑稿";
+  }
+  if (elements.submitButton) {
+    elements.submitButton.textContent = "提交复审";
+  }
+  if (elements.publishButton) {
+    elements.publishButton.textContent = "审核后转发到整木网资讯栏目";
+  }
+
+  const reviewTitle = document.querySelector("#editor-workbench .review-box h3");
+  if (reviewTitle) {
+    reviewTitle.textContent = "转发与审核";
+  }
+
+  ensureDirectForwardButton();
+}
+
+function selectArticle(articleId, options = {}) {
+  appState.selectedArticleId = Number(articleId);
+  renderArticles();
+  renderDetail();
+
+  if (options.scrollToWorkbench) {
+    document.querySelector("#editor-workbench")?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }
+}
+
+function createExcerpt(text, limit = 120) {
+  const normalized = String(text || "").replace(/\s+/g, " ").trim();
+  if (!normalized) {
+    return "";
+  }
+  if (normalized.length <= limit) {
+    return normalized;
+  }
+  return `${normalized.slice(0, limit).trim()}...`;
+}
+
+function buildArticleDraftPayload(article, autofill = false) {
+  const nextTitle = elements.newTitle.value.trim() || (autofill ? (article.newTitle || article.originalTitle || "") : "");
+  const nextSummary = elements.summary.value.trim() || (autofill ? (article.summary || createExcerpt(article.cleanText, 110)) : "");
+  const nextContent = elements.rewrittenContent.value.trim() || (autofill ? (article.rewrittenContent || article.cleanText || "") : "");
+  const nextSourceNote = elements.sourceNote.value.trim() || (
+    autofill ? (article.sourceNote || `来源：${article.sourceName}，原文链接与原发布时间已保留。`) : ""
+  );
+  const nextTags = elements.tags.value
+    .split(/[，,]/)
+    .map((item) => item.trim())
+    .filter(Boolean);
+
+  return {
+    newTitle: nextTitle,
+    summary: nextSummary,
+    rewrittenContent: nextContent,
+    tags: nextTags.length ? nextTags : (autofill ? [...(article.tags || []), ...(article.hitKeywords || [])].filter(Boolean) : []),
+    seoTitle: elements.seoTitle.value.trim() || (autofill ? (article.seoTitle || nextTitle) : ""),
+    seoDescription: elements.seoDescription.value.trim() || (autofill ? (article.seoDescription || createExcerpt(nextSummary || nextContent, 90)) : ""),
+    sourceNote: nextSourceNote,
+    recommendedCategoryId: Number(elements.category.value) || Number(article.recommendedCategoryId) || Number(appState.categories[0]?.id || 1)
+  };
+}
+
 // ========== 第二部分：会话与渲染函数 ==========
 function showLogin() {
   elements.loginOverlay.classList.remove("hidden");
+  elements.loginOverlay.hidden = false;
+  elements.loginOverlay.style.removeProperty("display");
   document.body.classList.add("overlay-open");
+}
+
+function showBootError(message) {
+  elements.loginError.textContent = String(message || "页面初始化失败，请重试");
+  reportClientEvent("boot_error", elements.loginError.textContent);
+  showLogin();
 }
 
 function hideLogin() {
   elements.loginOverlay.classList.add("hidden");
+  elements.loginOverlay.hidden = true;
+  elements.loginOverlay.style.display = "none";
   elements.loginError.textContent = "";
   document.body.classList.remove("overlay-open");
 }
@@ -253,9 +469,18 @@ function readStoredSessionToken() {
   }
 }
 
+function syncSessionCookie(token) {
+  const nextToken = String(token || "").trim();
+  const cookieValue = nextToken
+    ? `content_center_session=${encodeURIComponent(nextToken)}; path=/; SameSite=Lax`
+    : "content_center_session=; Max-Age=0; path=/; SameSite=Lax";
+  document.cookie = cookieValue;
+}
+
 function setSessionToken(token) {
   const nextToken = String(token || "").trim();
   appState.sessionToken = nextToken;
+  syncSessionCookie(nextToken);
   try {
     if (nextToken) {
       window.localStorage.setItem("content_center_session_token", nextToken);
@@ -308,8 +533,59 @@ function applyLoginQueryState() {
   window.history.replaceState(null, "", nextUrl);
 }
 
-function handleLoginSubmit() {
+async function handleLoginSubmit(event) {
+  event.preventDefault();
   elements.loginError.textContent = "";
+
+  const username = elements.loginUsername.value.trim();
+  const password = elements.loginPassword.value;
+  const submitButton = elements.loginForm.querySelector('button[type="submit"]');
+
+  if (!username || !password) {
+    elements.loginError.textContent = "请输入用户名和密码";
+    showLogin();
+    return;
+  }
+
+  submitButton.disabled = true;
+  submitButton.textContent = "登录中...";
+
+  try {
+    const response = await fetch("/api/auth/login", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      credentials: "same-origin",
+      body: JSON.stringify({ username, password })
+    });
+
+    const result = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      throw new Error(result.message || "登录失败，请重试");
+    }
+
+    if (result.sessionToken) {
+      setSessionToken(result.sessionToken);
+    }
+
+    reportClientEvent("login_success", "login bootstrap received", {
+      sessionUser: result.sessionUser?.username || username
+    });
+
+    if (result.sessionToken) {
+      await loadBootstrap();
+      return;
+    }
+
+    hideLogin();
+    refreshData(result);
+  } catch (error) {
+    reportClientEvent("login_error", error.message, { username });
+    elements.loginError.textContent = error.message || "登录失败，请重试";
+    showLogin();
+  } finally {
+    submitButton.disabled = false;
+    submitButton.textContent = "登录进入中台";
+  }
 }
 
 async function logout() {
@@ -698,7 +974,7 @@ function renderDetail() {
   elements.detailSource.textContent = `${article.sourceName} / ${article.authorName}`;
   elements.detailUrl.textContent = article.originalUrl;
   elements.detailUrl.href = article.originalUrl;
-  elements.detailTime.textContent = `${article.publishTime} 发布 / ${article.crawlTime} 抓取`;
+  elements.detailTime.textContent = `${article.publishTime} 原文发布时间 / ${article.crawlTime} 抓取时间`;
   elements.detailSimilarity.textContent = `${article.duplicateStatus} / ${article.similarityScore}%`;
   elements.originalTitle.textContent = article.originalTitle;
   elements.cleanText.textContent = article.cleanText;
@@ -710,9 +986,16 @@ function renderDetail() {
   elements.seoDescription.value = article.seoDescription || "";
   elements.sourceNote.value = article.sourceNote || "";
   elements.reviewComment.value = article.reviewComment || "";
+  const categoryName = getCategoryName(article.recommendedCategoryId);
   elements.publishResult.textContent = article.portalUrl
-    ? `已发布：${article.portalUrl}（主站 ID：${article.portalArticleId}）`
+    ? `已转发到整木网${categoryName}：${article.portalUrl}（主站 ID：${article.portalArticleId}）`
     : "";
+  if (elements.directForwardButton) {
+    elements.directForwardButton.textContent = `直接转发到${categoryName}`;
+  }
+  if (elements.publishButton) {
+    elements.publishButton.textContent = `审核后转发到${categoryName}`;
+  }
   elements.keepDuplicateButton.classList.toggle(
     "hidden",
     !(article.duplicateStatus === duplicateStatus.SUSPECTED && canDecideDuplicate())
@@ -744,6 +1027,9 @@ function renderDetail() {
   elements.approveButton.disabled = reviewerDisabled;
   elements.rejectButton.disabled = reviewerDisabled;
   elements.publishButton.disabled = reviewerDisabled;
+  if (elements.directForwardButton) {
+    elements.directForwardButton.disabled = reviewerDisabled;
+  }
   elements.archiveButton.disabled = reviewerDisabled;
 }
 
@@ -867,6 +1153,10 @@ async function loadBootstrap() {
   if (payload.sessionToken) {
     setSessionToken(payload.sessionToken);
   }
+  reportClientEvent("boot_success", "bootstrap loaded", {
+    sessionUser: payload.sessionUser?.username || "",
+    articleCount: Array.isArray(payload.articles) ? payload.articles.length : 0
+  });
   hideLogin();
   refreshData(payload);
 }
@@ -1014,6 +1304,38 @@ async function saveDraft() {
   refreshData(payload);
 }
 
+async function directForwardArticle() {
+  const article = getSelectedArticle();
+  if (!article) {
+    return;
+  }
+
+  const targetCategoryName = getCategoryName(Number(elements.category.value) || article.recommendedCategoryId);
+
+  const forwardComment = elements.reviewComment.value.trim() || (
+    article.duplicateStatus === getStatusEnums().duplicateStatus.SUSPECTED
+      ? `内容池直接转发到整木网${targetCategoryName}，人工确认保留疑似重复并保留来源信息。`
+      : `内容池直接转发到整木网${targetCategoryName}。`
+  );
+
+  if (isEditorRole()) {
+    const savedPayload = await request(`/api/articles/${article.id}/save`, {
+      method: "POST",
+      body: JSON.stringify(buildArticleDraftPayload(article, true))
+    });
+    refreshData(savedPayload);
+  }
+
+  const publishedPayload = await request(`/api/articles/${article.id}/review`, {
+    method: "POST",
+    body: JSON.stringify({
+      action: "publish",
+      comment: forwardComment
+    })
+  });
+  refreshData(publishedPayload);
+}
+
 async function submitForReview() {
   const article = getSelectedArticle();
   if (!article) {
@@ -1114,6 +1436,11 @@ function bindEvents() {
   elements.saveButton.addEventListener("click", () => {
     saveDraft().catch((error) => window.alert(error.message));
   });
+  if (elements.directForwardButton) {
+    elements.directForwardButton.addEventListener("click", () => {
+      directForwardArticle().catch((error) => window.alert(error.message));
+    });
+  }
   elements.submitButton.addEventListener("click", () => {
     submitForReview().catch((error) => window.alert(error.message));
   });
@@ -1135,6 +1462,7 @@ function bindEvents() {
 }
 
 async function initialize() {
+  configureFrontstageLayout();
   bindEvents();
   applyLoginQueryState();
   resetSourceForm();
@@ -1143,8 +1471,23 @@ async function initialize() {
   try {
     await loadBootstrap();
   } catch (error) {
-    showLogin();
+    showBootError(`初始化失败：${error.message}`);
   }
 }
+
+window.addEventListener("error", (event) => {
+  if (!event?.message) {
+    return;
+  }
+  showBootError(`页面脚本异常：${event.message}`);
+});
+
+window.addEventListener("unhandledrejection", (event) => {
+  const reason = event?.reason;
+  const message = typeof reason === "string"
+    ? reason
+    : (reason?.message || "未知错误");
+  showBootError(`页面请求异常：${message}`);
+});
 
 initialize();

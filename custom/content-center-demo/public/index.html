@@ -15,7 +15,8 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>整木网编辑中台 MVP</title>
-    <link rel="stylesheet" href="/styles.css?v=20260403-v16-session-token-fallback" />
+    <link rel="icon" href="data:," />
+    <link rel="stylesheet" href="/styles.css?v=20260404-v23-portal-regression" />
   </head>
   <body>
     <div id="login-overlay" class="login-overlay">
@@ -66,8 +67,6 @@
         <a href="#task-center">抓取任务</a>
         <a href="#source-management">抓取源</a>
         <a href="#keyword-management">关键词</a>
-        <a href="#ai-settings">AI 配置</a>
-        <a href="#failure-center">失败日志</a>
         <a href="#content-pool">内容池</a>
         <a href="#editor-workbench">编辑审核台</a>
         <a href="#log-center">操作日志</a>
@@ -220,7 +219,7 @@
             <div id="keyword-list" class="stack-list compact"></div>
           </div>
 
-          <div class="card" id="ai-settings">
+          <div class="card hidden" id="ai-settings" hidden style="display: none;">
             <div class="card-head">
               <h2>AI 配置</h2>
               <span class="pill">管理员后台</span>
@@ -263,7 +262,7 @@
             </div>
           </div>
 
-          <div class="card" id="failure-center">
+          <div class="card hidden" id="failure-center" hidden style="display: none;">
             <div class="card-head">
               <h2>抓取失败日志</h2>
               <span class="pill">正文提取 / 关键词命中</span>
@@ -322,7 +321,7 @@
                   <a id="detail-url" href="#" target="_blank" rel="noreferrer"></a>
                 </div>
                 <div>
-                  <span class="label">发布时间</span>
+                  <span class="label">原文发布时间</span>
                   <p id="detail-time"></p>
                 </div>
                 <div>
@@ -349,7 +348,7 @@
               </div>
 
               <div class="editor-block">
-                <label for="new-title">发布标题</label>
+                <label for="new-title">转发标题</label>
                 <input id="new-title" type="text" />
               </div>
 
@@ -365,7 +364,7 @@
 
               <div class="editor-grid">
                 <div class="editor-block">
-                  <label for="category">栏目</label>
+                  <label for="category">整木网资讯栏目</label>
                   <select id="category"></select>
                 </div>
                 <div class="editor-block">
@@ -398,11 +397,11 @@
 
               <div class="review-box">
                 <h3>审核动作</h3>
-                <textarea id="review-comment" rows="2" placeholder="填写审核意见、发布备注或保留疑似稿理由"></textarea>
+                <textarea id="review-comment" rows="2" placeholder="填写审核意见、转发备注或保留疑似稿理由"></textarea>
                 <div class="toolbar">
                   <button id="approve-button" class="secondary" type="button">审核通过</button>
                   <button id="reject-button" class="danger" type="button">驳回修改</button>
-                  <button id="publish-button" type="button">通过并发布</button>
+                  <button id="publish-button" type="button">审核后转发到整木网资讯栏目</button>
                   <button id="archive-button" class="secondary" type="button">归档</button>
                 </div>
                 <div id="publish-result" class="publish-result"></div>
@@ -434,6 +433,6 @@
       </article>
     </template>
 
-    <script src="/app.js?v=20260403-v16-session-token-fallback"></script>
+    <script src="/app.js?v=20260404-v23-portal-regression"></script>
   </body>
 </html>

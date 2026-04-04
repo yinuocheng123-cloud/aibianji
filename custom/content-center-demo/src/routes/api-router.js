@@ -32,6 +32,12 @@ const {
 
 // ========== 第一部分：会话与通用响应 ==========
 function createApiRouter({ sessions, store, aiService, crawlService }) {
+  const simulatedPortalRoutes = {
+    "行业资讯": "industry",
+    "企业资讯": "enterprise",
+    "市场动态": "market"
+  };
+
   function isHtmlFormRequest(request) {
     const contentType = String(request.headers["content-type"] || "").toLowerCase();
     return contentType.includes("application/x-www-form-urlencoded");
@@ -40,7 +46,8 @@ function createApiRouter({ sessions, store, aiService, crawlService }) {
   function getCurrentUser(request) {
     const cookies = parseCookies(request);
     const headerToken = String(request.headers["x-session-token"] || "").trim();
-    const token = cookies[SESSION_COOKIE] || headerToken;
+    const cookieToken = String(cookies[SESSION_COOKIE] || "").trim();
+    const token = [headerToken, cookieToken].find((candidate) => candidate && sessions.has(candidate));
     if (!token || !sessions.has(token)) {
       return null;
     }
@@ -83,7 +90,7 @@ function createApiRouter({ sessions, store, aiService, crawlService }) {
         { label: "待处理内容", value: pendingReview, hint: "待审核 / 编辑中 / 待复审" },
         { label: "AI 调用次数", value: aiCalls, hint: "摘要、标题、改写、扩写总计" },
         { label: "疑似重复", value: duplicateCount, hint: "需人工判断是否保留" },
-        { label: "已发布", value: published, hint: "演示接口回写主站信息" }
+        { label: "已发布", value: published, hint: "已模拟回写整木网资讯栏目" }
       ]
     };
   }
@@ -121,6 +128,22 @@ function createApiRouter({ sessions, store, aiService, crawlService }) {
 
   function normalizeDraftText(value) {
     return String(value ?? "").trim();
+  }
+
+  function getPortalCategoryTarget(categoryId) {
+    const state = store.getState();
+    const matchedCategory = state.categories.find((item) => item.id === Number(categoryId)) || state.categories[0] || {
+      id: 1,
+      name: "行业资讯",
+      portalCategoryId: 401
+    };
+    const categoryName = matchedCategory.name || "行业资讯";
+    return {
+      categoryId: Number(matchedCategory.id || 1),
+      categoryName,
+      portalCategoryId: Number(matchedCategory.portalCategoryId || 401),
+      pathSegment: simulatedPortalRoutes[categoryName] || "industry"
+    };
   }
 
   function normalizeTagList(value) {
@@ -192,6 +215,25 @@ function createApiRouter({ sessions, store, aiService, crawlService }) {
         sessions.delete(token);
       }
       sendJson(response, 200, { ok: true }, { "Set-Cookie": clearSessionCookie() });
+      return;
+    }
+
+    if (request.method === "POST" && pathname === "/api/client-events") {
+      const body = await readRequestBody(request);
+      const eventType = String(body.type || "unknown").trim() || "unknown";
+      const message = String(body.message || "").trim() || "empty";
+      const details = [
+        String(body.url || "").trim(),
+        String(body.sessionUser || "").trim(),
+        String(body.articleCount ?? "").trim()
+      ].filter(Boolean).join(" | ");
+
+      store.appendLog(
+        LOG_TYPES.SYSTEM || LOG_TYPES.CONFIG,
+        `[client-event] ${eventType}: ${message}${details ? ` | ${details}` : ""}`
+      );
+      store.saveState();
+      sendJson(response, 200, { ok: true });
       return;
     }
 
@@ -600,11 +642,15 @@ function createApiRouter({ sessions, store, aiService, crawlService }) {
         article.publishStatus = PUBLISH_STATUS.PENDING;
         store.appendLog(LOG_TYPES.REVIEW, `文章 ${article.id} 已由 ${user.displayName} 审核通过。`);
       } else if (action === "publish") {
+        const portalTarget = getPortalCategoryTarget(article.recommendedCategoryId);
         article.status = ARTICLE_STATUS.PUBLISHED;
         article.publishStatus = PUBLISH_STATUS.PUBLISHED;
-        article.portalArticleId = `portal-${article.id}`;
-        article.portalUrl = `https://portal.example.com/articles/${article.id}`;
-        store.appendLog(LOG_TYPES.PUBLISH, `文章 ${article.id} 已发布并回写主站信息。`);
+        article.portalArticleId = `zmw-${portalTarget.portalCategoryId}-${article.id}`;
+        article.portalUrl = `https://demo.zhengmuwang.local/zixun/${portalTarget.pathSegment}/${article.id}`;
+        store.appendLog(
+          LOG_TYPES.PUBLISH,
+          `文章 ${article.id} 已转发到整木网${portalTarget.categoryName}，并回写模拟主站信息。`
+        );
       } else if (action === "archive") {
         article.status = ARTICLE_STATUS.ARCHIVED;
         article.publishStatus = article.publishStatus === PUBLISH_STATUS.PUBLISHED ? PUBLISH_STATUS.PUBLISHED : PUBLISH_STATUS.UNPUBLISHED;

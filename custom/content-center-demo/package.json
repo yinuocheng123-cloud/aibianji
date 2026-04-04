@@ -6,7 +6,8 @@
   "scripts": {
     "dev": "node server.js",
     "start": "node server.js",
-    "smoke:e2e": "node scripts/smoke-e2e.js"
+    "smoke:e2e": "node scripts/smoke-e2e.js",
+    "smoke:portal-columns": "set SMOKE_TEST_ALL_CATEGORIES=1&& node scripts/smoke-e2e.js"
   },
   "dependencies": {
     "sql.js": "^1.14.1"
