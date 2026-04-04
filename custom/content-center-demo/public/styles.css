@@ -1,19 +1,19 @@
 /*
-文件说明：该文件实现整木网编辑中台 demo 的页面样式。
-功能说明：负责定义苹果极简风格下的页面框架、导航、仪表盘、列表卡片和编辑工作台样式。
+文件说明：该文件实现整木网编辑中台前台的简洁列表式样式。
+功能说明：负责定义顶部导航、仪表盘、信息源、内容池、编审台与发布榜的统一视觉风格。
 
 结构概览：
   第一部分：基础变量与全局样式
-  第二部分：顶部区域、导航与仪表盘
-  第三部分：工作区与内容卡片
-  第四部分：编辑工作台与表单
+  第二部分：顶部区域与仪表盘
+  第三部分：区块与列表布局
+  第四部分：编审台与表单
   第五部分：响应式适配
 */
 
 /* ========== 第一部分：基础变量与全局样式 ========== */
 :root {
   --bg: #f5f5f7;
-  --paper: rgba(255, 255, 255, 0.86);
+  --paper: rgba(255, 255, 255, 0.88);
   --paper-strong: #ffffff;
   --ink: #1d1d1f;
   --muted: #6e6e73;
@@ -27,8 +27,8 @@
   --warning-soft: rgba(138, 106, 23, 0.1);
   --danger: #b42318;
   --danger-soft: rgba(180, 35, 24, 0.1);
-  --shadow-lg: 0 18px 40px rgba(15, 23, 42, 0.06);
-  --shadow-sm: 0 6px 18px rgba(15, 23, 42, 0.04);
+  --shadow-lg: 0 20px 44px rgba(15, 23, 42, 0.06);
+  --shadow-sm: 0 8px 18px rgba(15, 23, 42, 0.04);
   --radius-xl: 28px;
   --radius-lg: 22px;
   --radius-md: 16px;
@@ -48,7 +48,7 @@ body {
   color: var(--ink);
   font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "PingFang SC", "Microsoft YaHei", sans-serif;
   background:
-    radial-gradient(circle at top center, rgba(255, 255, 255, 0.92) 0%, rgba(245, 245, 247, 0.98) 46%, #f5f5f7 100%);
+    radial-gradient(circle at top center, rgba(255, 255, 255, 0.94) 0%, rgba(245, 245, 247, 0.98) 44%, #f5f5f7 100%);
 }
 
 body.overlay-open {
@@ -105,7 +105,7 @@ select {
   border: 1px solid var(--line);
   border-radius: 14px;
   padding: 12px 14px;
-  background: rgba(255, 255, 255, 0.92);
+  background: rgba(255, 255, 255, 0.94);
   color: var(--ink);
   transition: border-color 0.2s ease, box-shadow 0.2s ease, background-color 0.2s ease;
 }
@@ -114,9 +114,8 @@ input:focus,
 textarea:focus,
 select:focus {
   outline: none;
-  border-color: rgba(0, 113, 227, 0.3);
+  border-color: rgba(0, 113, 227, 0.28);
   box-shadow: 0 0 0 4px rgba(0, 113, 227, 0.08);
-  background: #fff;
 }
 
 textarea {
@@ -127,54 +126,26 @@ textarea {
   display: none;
 }
 
-.login-overlay {
-  position: fixed;
-  inset: 0;
-  z-index: 50;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 24px;
-  background: rgba(10, 10, 12, 0.28);
-  backdrop-filter: blur(18px);
-}
-
-.login-card {
-  width: min(760px, 100%);
-  display: grid;
-  grid-template-columns: 1.05fr 1fr;
-  gap: 20px;
-  padding: 24px;
-  border-radius: 30px;
-  border: 1px solid rgba(255, 255, 255, 0.82);
-  background: rgba(255, 255, 255, 0.92);
-  box-shadow: 0 30px 60px rgba(15, 23, 42, 0.14);
-}
-
-.login-card h2 {
-  margin: 6px 0 10px;
-  font-size: 1.65rem;
-}
-
-.account-list {
-  margin: 14px 0 0;
-  padding-left: 18px;
+.eyebrow {
+  margin: 0;
   color: var(--muted);
-  line-height: 1.7;
-}
-
-.login-form,
-.form-stack {
-  display: grid;
-  gap: 14px;
-}
-
-.login-form label,
-.form-stack label {
-  display: grid;
-  gap: 8px;
-  font-size: 0.9rem;
+  letter-spacing: 0.04em;
+  font-size: 0.78rem;
   font-weight: 600;
+}
+
+.note-text {
+  margin: 8px 0 0;
+  color: var(--muted);
+  font-size: 0.86rem;
+  line-height: 1.6;
+}
+
+.field-hint {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.8rem;
+  line-height: 1.55;
 }
 
 .form-error {
@@ -183,9 +154,9 @@ textarea {
   font-size: 0.88rem;
 }
 
-/* ========== 第二部分：顶部区域、导航与仪表盘 ========== */
+/* ========== 第二部分：顶部区域与仪表盘 ========== */
 .page-shell {
-  max-width: 1480px;
+  max-width: 1360px;
   margin: 0 auto;
   padding: 24px 20px 40px;
 }
@@ -233,14 +204,6 @@ textarea {
   margin: 4px 0 0;
   font-size: 0.92rem;
   font-weight: 650;
-}
-
-.eyebrow {
-  margin: 0;
-  color: var(--muted);
-  letter-spacing: 0.04em;
-  font-size: 0.78rem;
-  font-weight: 600;
 }
 
 .feature-nav {
@@ -335,15 +298,8 @@ textarea {
   line-height: 1.35;
 }
 
-/* ========== 第三部分：工作区与内容卡片 ========== */
-.workspace {
-  display: grid;
-  grid-template-columns: 1.02fr 1.18fr 1.42fr;
-  gap: 18px;
-  align-items: start;
-}
-
-.column {
+/* ========== 第三部分：区块与列表布局 ========== */
+.workspace.clean-workspace {
   display: grid;
   gap: 18px;
 }
@@ -353,25 +309,34 @@ textarea {
   border-radius: var(--radius-xl);
 }
 
-.small-title {
-  color: var(--muted);
-  font-size: 0.82rem;
-  font-weight: 600;
+.section-card {
+  display: grid;
+  gap: 16px;
+}
+
+.section-note {
+  margin: 6px 0 0;
+}
+
+.card-head,
+.panel-head,
+.list-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
 }
 
 .card-head {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: 12px;
-  margin-bottom: 16px;
+  align-items: flex-start;
 }
 
 .card-head h2,
-.history-box h3,
-.review-box h3 {
+.panel-head h3,
+.review-box h3,
+.history-box h3 {
   margin: 0;
-  font-size: 1.06rem;
+  font-size: 1.04rem;
   font-weight: 700;
   letter-spacing: -0.01em;
 }
@@ -394,28 +359,164 @@ textarea {
   color: var(--accent);
 }
 
-.stack-list,
-.mini-list,
-.article-list {
+.dual-panel,
+.workbench-grid {
+  display: grid;
+  gap: 16px;
+}
+
+.dual-panel {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.workbench-grid {
+  grid-template-columns: 320px minmax(0, 1fr);
+  align-items: start;
+}
+
+.simple-panel,
+.workbench-list-panel,
+.workbench-detail-panel,
+.review-box,
+.history-box {
+  padding: 16px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  background: rgba(255, 255, 255, 0.76);
+}
+
+.simple-form,
+.login-form {
+  display: grid;
+  gap: 14px;
+}
+
+.simple-form label,
+.login-form label {
+  display: grid;
+  gap: 8px;
+  font-size: 0.9rem;
+  font-weight: 600;
+}
+
+.compact-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.inline-check {
+  display: inline-flex !important;
+  align-items: center;
+  gap: 10px;
+  font-weight: 500 !important;
+}
+
+.inline-check input {
+  width: auto;
+}
+
+.toolbar,
+.ai-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 12px;
+}
+
+.compact-toolbar {
+  margin-top: 0;
+}
+
+.content-toolbar {
+  display: flex;
+  align-items: end;
+  justify-content: space-between;
+  gap: 14px;
+  flex-wrap: wrap;
+}
+
+.source-action-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  flex-wrap: wrap;
+  padding: 14px 16px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  background: rgba(29, 29, 31, 0.03);
+}
+
+.collection-note {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.88rem;
+  line-height: 1.65;
+}
+
+.search-field {
+  display: grid;
+  gap: 8px;
+  min-width: 280px;
+  font-size: 0.9rem;
+  font-weight: 600;
+}
+
+.simple-list,
+.mini-list {
   display: grid;
   gap: 10px;
 }
 
+.content-split-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.content-subpanel {
+  display: grid;
+  gap: 10px;
+  align-content: start;
+}
+
+.subpanel-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.subpanel-head h4 {
+  margin: 0;
+  font-size: 0.92rem;
+  font-weight: 650;
+  letter-spacing: -0.01em;
+}
+
 .stack-item,
-.article-item,
+.simple-item,
 .mini-item {
-  border-radius: var(--radius-md);
-  border: 1px solid var(--line);
-  background: rgba(255, 255, 255, 0.92);
   padding: 14px 15px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  background: rgba(255, 255, 255, 0.92);
 }
 
 .stack-item h3,
-.article-item h3 {
-  margin: 0 0 6px;
-  font-size: 0.98rem;
+.simple-item h3,
+.simple-item h4 {
+  margin: 0;
+  font-size: 0.96rem;
   font-weight: 650;
   letter-spacing: -0.01em;
+}
+
+.simple-item.active,
+.simple-item.selected {
+  border-color: rgba(0, 113, 227, 0.18);
+  background: rgba(0, 113, 227, 0.04);
 }
 
 .meta-row {
@@ -427,15 +528,66 @@ textarea {
   line-height: 1.45;
 }
 
-.stack-list.compact .stack-item {
-  padding: 12px 14px;
+.simple-item .note-text,
+.mini-item p {
+  margin: 6px 0 0;
 }
 
-.list-head {
+.article-link-list .simple-item {
+  display: grid;
+  gap: 10px;
+}
+
+.article-row {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  gap: 12px;
+  align-items: start;
+}
+
+.article-check {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 10px;
+  padding-top: 3px;
+}
+
+.article-check input {
+  width: 18px;
+  height: 18px;
+  margin: 0;
+}
+
+.article-title {
+  font-weight: 650;
+  color: var(--ink);
+  text-decoration: none;
+}
+
+.article-title:hover {
+  color: var(--accent);
+}
+
+.article-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.keyword-actions {
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+.keyword-toggle {
+  min-height: 30px;
+  padding: 4px 10px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: rgba(29, 29, 31, 0.03);
+  color: var(--muted);
+}
+
+.keyword-toggle input {
+  accent-color: var(--accent);
 }
 
 .ghost-button {
@@ -454,90 +606,24 @@ textarea {
   color: #005bb5;
 }
 
-.note-text {
-  margin: 8px 0 0;
+.selection-summary {
+  padding: 12px 14px;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  background: rgba(29, 29, 31, 0.03);
   color: var(--muted);
-  font-size: 0.86rem;
+  font-size: 0.88rem;
   line-height: 1.55;
 }
 
-.field-hint {
-  margin: 0;
-  color: var(--muted);
-  font-size: 0.8rem;
-  line-height: 1.5;
-}
-
-.preview-panel {
-  margin-top: 14px;
-  padding: 14px;
-  border: 1px solid var(--line);
-  border-radius: 18px;
-  background: rgba(29, 29, 31, 0.03);
-}
-
-.preview-panel h3 {
-  margin: 0 0 6px;
-  font-size: 0.95rem;
-}
-
-.checklist-block {
-  display: grid;
-  gap: 10px;
-}
-
-.checklist {
-  display: grid;
-  gap: 8px;
-  max-height: 180px;
-  overflow: auto;
-  padding: 10px;
-  border: 1px solid var(--line);
-  border-radius: 16px;
-  background: rgba(255, 255, 255, 0.92);
-}
-
-.check-item {
-  display: flex !important;
-  align-items: center;
-  gap: 10px;
-  font-weight: 500 !important;
-}
-
-.check-item input {
-  width: auto;
-}
-
-.task-option {
-  margin-top: -2px;
-  color: var(--text);
-}
-
-.article-item {
-  cursor: pointer;
-  transition: border-color 0.2s ease, box-shadow 0.2s ease, transform 0.2s ease;
-}
-
-.article-item:hover,
-.article-item.active {
-  transform: translateY(-1px);
-  border-color: rgba(0, 113, 227, 0.18);
-  box-shadow: 0 10px 20px rgba(15, 23, 42, 0.06);
-}
-
-.status-row {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: 10px;
-  margin-top: 10px;
-}
-
 .status-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   padding: 5px 10px;
   border-radius: 999px;
-  font-size: 0.78rem;
   background: rgba(29, 29, 31, 0.05);
+  font-size: 0.78rem;
 }
 
 .status-badge.warn {
@@ -555,13 +641,7 @@ textarea {
   color: var(--danger);
 }
 
-/* ========== 第四部分：编辑工作台与表单 ========== */
-.detail-card {
-  position: sticky;
-  top: 18px;
-}
-
-.filter-grid,
+/* ========== 第四部分：编审台与表单 ========== */
 .detail-meta,
 .editor-grid {
   display: grid;
@@ -569,14 +649,14 @@ textarea {
   gap: 14px 16px;
 }
 
-.detail-meta p,
-.label {
-  margin: 4px 0 0;
-}
-
 .label {
   color: var(--muted);
   font-size: 0.8rem;
+}
+
+.detail-meta p,
+.label {
+  margin: 4px 0 0;
 }
 
 .editor-block {
@@ -591,10 +671,10 @@ textarea {
 }
 
 .read-box {
-  border-radius: 16px;
-  border: 1px solid var(--line);
-  background: rgba(29, 29, 31, 0.03);
   padding: 13px 14px;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  background: rgba(29, 29, 31, 0.03);
   line-height: 1.7;
 }
 
@@ -608,70 +688,86 @@ textarea {
   font-size: 0.86rem;
 }
 
-.ai-actions,
-.toolbar {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 10px;
-  margin-top: 16px;
+.preview-panel {
+  padding: 14px;
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  background: rgba(29, 29, 31, 0.03);
 }
 
-.review-box,
-.history-box {
-  margin-top: 18px;
-  padding: 16px;
-  border-radius: 18px;
-  border: 1px solid var(--line);
-  background: rgba(29, 29, 31, 0.03);
+.preview-panel h3 {
+  margin: 0 0 6px;
+  font-size: 0.95rem;
 }
 
 .publish-result {
   margin-top: 12px;
   padding: 12px 14px;
+  min-height: 20px;
   border-radius: 14px;
   background: var(--success-soft);
   color: var(--success);
-  min-height: 20px;
   font-size: 0.9rem;
 }
 
 .empty-state {
   padding: 22px;
-  border-radius: 18px;
   border: 1px dashed var(--line-strong);
+  border-radius: 18px;
   background: rgba(29, 29, 31, 0.025);
   color: var(--muted);
   line-height: 1.7;
 }
 
-.mini-item p {
-  margin: 4px 0 0;
+.login-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background: rgba(10, 10, 12, 0.28);
+  backdrop-filter: blur(18px);
+}
+
+.login-card {
+  width: min(760px, 100%);
+  display: grid;
+  grid-template-columns: 1.05fr 1fr;
+  gap: 20px;
+  padding: 24px;
+  border-radius: 30px;
+  border: 1px solid rgba(255, 255, 255, 0.82);
+  background: rgba(255, 255, 255, 0.92);
+  box-shadow: 0 30px 60px rgba(15, 23, 42, 0.14);
+}
+
+.login-card h2 {
+  margin: 6px 0 10px;
+  font-size: 1.65rem;
+}
+
+.account-list {
+  margin: 14px 0 0;
+  padding-left: 18px;
   color: var(--muted);
-  font-size: 0.85rem;
+  line-height: 1.7;
 }
 
 /* ========== 第五部分：响应式适配 ========== */
-@media (max-width: 1360px) {
+@media (max-width: 1180px) {
   .stats-grid {
     grid-template-columns: repeat(3, minmax(0, 1fr));
   }
-}
 
-@media (max-width: 1180px) {
+  .dual-panel,
+  .workbench-grid {
+    grid-template-columns: 1fr;
+  }
+
   .login-card {
     grid-template-columns: 1fr;
-  }
-
-  .workspace {
-    grid-template-columns: 1fr;
-  }
-
-  .detail-card {
-    position: static;
-  }
-
-  .stats-grid {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
 
@@ -687,19 +783,20 @@ textarea {
     border-radius: 20px;
   }
 
-  .dashboard-nav {
+  .topbar,
+  .session-panel,
+  .content-toolbar,
+  .dashboard-nav,
+  .source-action-bar {
     flex-direction: column;
     align-items: stretch;
   }
 
-  .dashboard-title {
-    min-height: 38px;
-  }
-
   .stats-grid,
-  .filter-grid,
+  .compact-grid,
   .detail-meta,
-  .editor-grid {
+  .editor-grid,
+  .content-split-grid {
     grid-template-columns: 1fr;
   }
 
@@ -708,8 +805,17 @@ textarea {
     width: 100%;
   }
 
-  .ai-actions,
-  .toolbar {
+  .toolbar,
+  .ai-actions {
     flex-direction: column;
+  }
+
+  .article-row {
+    grid-template-columns: auto 1fr;
+  }
+
+  .article-actions {
+    grid-column: 2;
+    justify-content: flex-start;
   }
 }

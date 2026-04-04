@@ -151,6 +151,46 @@ function createApiRouter({ sessions, store, aiService, crawlService }) {
     return Array.from(new Set(rawList.map((item) => normalizeDraftText(item)).filter(Boolean)));
   }
 
+  function guessSourceTypeFromUrl(rawUrl) {
+    const url = String(rawUrl || "").toLowerCase();
+    if (url.includes("mp.weixin.qq.com") || url.includes("weixin")) {
+      return "公众号";
+    }
+    if (url.includes("toutiao") || url.includes("weibo") || url.includes("sohu") || url.includes("substack")) {
+      return "自媒体";
+    }
+    return "网站";
+  }
+
+  function buildPromotedSourceFromArticle(article) {
+    const fallbackName = String(article.sourceName || article.authorName || "开放发现来源").trim() || "开放发现来源";
+
+    try {
+      const parsedUrl = new URL(String(article.originalUrl || "").trim());
+      return {
+        name: fallbackName,
+        domain: parsedUrl.host,
+        sourceType: guessSourceTypeFromUrl(parsedUrl.toString()),
+        entryUrl: `${parsedUrl.protocol}//${parsedUrl.host}`,
+        crawlInterval: "每天 09:00",
+        enabled: true,
+        parseRule: "article",
+        excludeRule: ""
+      };
+    } catch (error) {
+      return {
+        name: fallbackName,
+        domain: "",
+        sourceType: "网站",
+        entryUrl: "",
+        crawlInterval: "每天 09:00",
+        enabled: true,
+        parseRule: "article",
+        excludeRule: ""
+      };
+    }
+  }
+
   function applyArticleDraft(article, draftBody) {
     const fieldNames = ["newTitle", "summary", "rewrittenContent", "seoTitle", "seoDescription", "sourceNote"];
     fieldNames.forEach((field) => {
@@ -348,6 +388,28 @@ function createApiRouter({ sessions, store, aiService, crawlService }) {
       return;
     }
 
+    if (request.method === "POST" && pathname === "/api/sources/delete") {
+      if (!requireRole(user, response, [ROLES.ADMIN])) {
+        return;
+      }
+
+      const body = await readRequestBody(request);
+      const sourceId = Number(body.id || 0);
+      const state = store.getState();
+      const source = state.sourceSites.find((item) => item.id === sourceId);
+
+      if (!source) {
+        sendJson(response, 404, { message: "抓取源不存在" });
+        return;
+      }
+
+      state.sourceSites = state.sourceSites.filter((item) => item.id !== sourceId);
+      store.appendLog(LOG_TYPES.CONFIG, `抓取源“${source.name}”已删除。`);
+      store.saveState();
+      sendJson(response, 200, buildBootstrapPayload(user));
+      return;
+    }
+
     if (request.method === "POST" && pathname === "/api/keywords/save") {
       if (!requireRole(user, response, [ROLES.ADMIN])) {
         return;
@@ -389,6 +451,28 @@ function createApiRouter({ sessions, store, aiService, crawlService }) {
       return;
     }
 
+    if (request.method === "POST" && pathname === "/api/keywords/delete") {
+      if (!requireRole(user, response, [ROLES.ADMIN])) {
+        return;
+      }
+
+      const body = await readRequestBody(request);
+      const keywordId = Number(body.id || 0);
+      const state = store.getState();
+      const keyword = state.keywords.find((item) => item.id === keywordId);
+
+      if (!keyword) {
+        sendJson(response, 404, { message: "关键词不存在" });
+        return;
+      }
+
+      state.keywords = state.keywords.filter((item) => item.id !== keywordId);
+      store.appendLog(LOG_TYPES.CONFIG, `关键词“${keyword.keyword}”已删除。`);
+      store.saveState();
+      sendJson(response, 200, buildBootstrapPayload(user));
+      return;
+    }
+
     if (request.method === "POST" && pathname === "/api/ai/settings/save") {
       if (!requireRole(user, response, [ROLES.ADMIN])) {
         return;
@@ -417,6 +501,28 @@ function createApiRouter({ sessions, store, aiService, crawlService }) {
             keepSuspectedDuplicates: body.keepSuspectedDuplicates !== false
           }
         );
+        sendJson(response, 200, buildBootstrapPayload(user));
+      } catch (error) {
+        sendJson(response, 400, { message: error.message });
+      }
+      return;
+    }
+
+    if (request.method === "POST" && pathname === "/api/tasks/discover") {
+      if (!requireRole(user, response, [ROLES.ADMIN])) {
+        return;
+      }
+
+      const body = await readRequestBody(request);
+      const state = store.getState();
+      const keywordIds = Array.isArray(body.keywordIds) && body.keywordIds.length
+        ? body.keywordIds.map(Number)
+        : state.keywords.filter((item) => item.enabled).map((item) => item.id);
+
+      try {
+        await crawlService.runDiscoveryTask(keywordIds, user.displayName, {
+          keepSuspectedDuplicates: body.keepSuspectedDuplicates !== false
+        });
         sendJson(response, 200, buildBootstrapPayload(user));
       } catch (error) {
         sendJson(response, 400, { message: error.message });
@@ -524,6 +630,61 @@ function createApiRouter({ sessions, store, aiService, crawlService }) {
       article.reviewComment = reason;
       article.updatedAt = nowText();
       store.appendLog(LOG_TYPES.REVIEW, `文章 ${article.id} 的疑似重复标记已由 ${user.displayName} 手动保留。理由：${reason}`);
+      store.saveState();
+      sendJson(response, 200, buildBootstrapPayload(user));
+      return;
+    }
+
+    if (request.method === "POST" && /^\/api\/articles\/\d+\/promote-source$/.test(pathname)) {
+      if (!requireRole(user, response, [ROLES.ADMIN, ROLES.EDITOR])) {
+        return;
+      }
+
+      const [, articleId] = pathname.match(/^\/api\/articles\/(\d+)\/promote-source$/);
+      const article = getArticleOrFail(articleId, response);
+      if (!article) {
+        return;
+      }
+
+      const state = store.getState();
+      const nextSource = buildPromotedSourceFromArticle(article);
+      if (!nextSource.domain || !nextSource.entryUrl) {
+        sendJson(response, 400, { message: "当前文章缺少可识别的网址，暂时无法转为重点抓取源" });
+        return;
+      }
+
+      const matchedSource = state.sourceSites.find((item) => (
+        item.domain === nextSource.domain
+        || item.entryUrl === nextSource.entryUrl
+      ));
+
+      if (matchedSource) {
+        matchedSource.enabled = true;
+        matchedSource.updatedAt = nowText();
+        matchedSource.lastResult = `最近一次确认：已从开放发现来源“${article.sourceName}”转为持续跟踪。`;
+        article.sourceId = matchedSource.id;
+        article.sourceName = matchedSource.name;
+        article.authorName = matchedSource.name;
+        article.sourceNote = `${article.sourceNote || ""} 已确认该来源纳入重点抓取源持续跟踪。`.trim();
+        article.updatedAt = nowText();
+        store.appendLog(LOG_TYPES.CONFIG, `开放发现来源“${matchedSource.name}”已确认纳入重点抓取源。`);
+      } else {
+        const createdSource = {
+          id: createId(),
+          ...nextSource,
+          lastResult: `最近一次确认：已从开放发现来源“${article.sourceName}”转为持续跟踪。`,
+          createdAt: nowText(),
+          updatedAt: nowText()
+        };
+        state.sourceSites.unshift(createdSource);
+        article.sourceId = createdSource.id;
+        article.sourceName = createdSource.name;
+        article.authorName = createdSource.name;
+        article.sourceNote = `${article.sourceNote || ""} 已从开放发现转为重点抓取源持续跟踪。`.trim();
+        article.updatedAt = nowText();
+        store.appendLog(LOG_TYPES.CONFIG, `新增重点抓取源“${createdSource.name}”，来源于开放发现文章 ${article.id}。`);
+      }
+
       store.saveState();
       sendJson(response, 200, buildBootstrapPayload(user));
       return;

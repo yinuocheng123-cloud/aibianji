@@ -56,6 +56,8 @@ const appState = {
   statusEnums: DEFAULT_STATUS_ENUMS,
   sourcePreview: null,
   selectedArticleId: null,
+  selectedArticleIds: [],
+  reviewQueueIds: [],
   editingSourceId: null,
   editingKeywordId: null,
   filters: {
@@ -89,6 +91,8 @@ const elements = {
   sourceEnabled: document.querySelector("#source-enabled"),
   sourceParseRule: document.querySelector("#source-parse-rule"),
   sourceExcludeRule: document.querySelector("#source-exclude-rule"),
+  discoverButton: document.querySelector("#discover-button"),
+  discoverStatus: document.querySelector("#discover-status"),
   previewSourceButton: document.querySelector("#preview-source-button"),
   saveSourceButton: document.querySelector("#save-source-button"),
   resetSourceButton: document.querySelector("#reset-source-button"),
@@ -122,8 +126,15 @@ const elements = {
   filterStatus: document.querySelector("#filter-status"),
   filterSource: document.querySelector("#filter-source"),
   filterKeyword: document.querySelector("#filter-keyword"),
+  selectionSummary: document.querySelector("#selection-summary"),
+  selectAllButton: document.querySelector("#select-all-button"),
+  clearSelectedButton: document.querySelector("#clear-selected-button"),
+  batchForwardButton: document.querySelector("#batch-forward-button"),
+  sendToWorkbenchButton: document.querySelector("#send-to-workbench-button"),
   articleList: document.querySelector("#article-list"),
-  logList: document.querySelector("#log-list"),
+  reviewQueue: document.querySelector("#review-queue"),
+  publishBoardSummary: document.querySelector("#publish-board-summary"),
+  publishBoardList: document.querySelector("#publish-board-list"),
   detailEmpty: document.querySelector("#detail-empty"),
   detailPanel: document.querySelector("#detail-panel"),
   detailStatus: document.querySelector("#detail-status"),
@@ -215,6 +226,16 @@ function getSelectedArticle() {
   return appState.articles.find((item) => item.id === appState.selectedArticleId) || null;
 }
 
+function getSelectedArticles() {
+  const selectedIds = new Set(appState.selectedArticleIds);
+  return appState.articles.filter((item) => selectedIds.has(item.id));
+}
+
+function getReviewQueueArticles() {
+  const queueIds = new Set(appState.reviewQueueIds);
+  return appState.articles.filter((item) => queueIds.has(item.id));
+}
+
 function getCategoryById(categoryId) {
   return appState.categories.find((item) => Number(item.id) === Number(categoryId)) || null;
 }
@@ -241,6 +262,133 @@ function isAdminRole() {
 
 function getLatestFailureForSource(sourceId) {
   return appState.crawlFailures.find((item) => Number(item.sourceId) === Number(sourceId)) || null;
+}
+
+function syncArticleState() {
+  const validIds = new Set(appState.articles.map((item) => item.id));
+  appState.selectedArticleIds = appState.selectedArticleIds.filter((id) => validIds.has(id));
+  appState.reviewQueueIds = appState.reviewQueueIds.filter((id) => validIds.has(id));
+
+  if (!validIds.has(appState.selectedArticleId)) {
+    appState.selectedArticleId = appState.reviewQueueIds[0] || appState.selectedArticleIds[0] || appState.articles[0]?.id || null;
+  }
+}
+
+function toggleArticleSelection(articleId) {
+  const nextSelection = new Set(appState.selectedArticleIds);
+  if (nextSelection.has(articleId)) {
+    nextSelection.delete(articleId);
+  } else {
+    nextSelection.add(articleId);
+  }
+  appState.selectedArticleIds = Array.from(nextSelection);
+}
+
+function setSelectedArticles(articleIds) {
+  appState.selectedArticleIds = Array.from(new Set(articleIds.map((item) => Number(item))));
+}
+
+function getPortalCategoryTargetName(article) {
+  return getCategoryName(article?.recommendedCategoryId);
+}
+
+function deriveDomainFromUrl(url) {
+  try {
+    return new URL(String(url || "")).host;
+  } catch (error) {
+    return "";
+  }
+}
+
+function getTrackedSourceForArticle(article) {
+  const sourceHost = deriveDomainFromUrl(article?.originalUrl || "");
+  return appState.sourceSites.find((source) => (
+    Number(source.id) === Number(article?.sourceId)
+    || (sourceHost && (source.domain === sourceHost || deriveDomainFromUrl(source.entryUrl) === sourceHost))
+  )) || null;
+}
+
+function getArticleCollectionMode(article) {
+  return getTrackedSourceForArticle(article) ? "重点抓取源" : "开放发现";
+}
+
+function canPromoteSource(article) {
+  return Boolean(article) && !getTrackedSourceForArticle(article) && ["admin", "editor"].includes(appState.sessionUser?.role);
+}
+
+function inferSourceTypeFromUrl(url) {
+  const host = deriveDomainFromUrl(url);
+  if (!host) {
+    return "公开来源";
+  }
+  if (host.includes("mp.weixin.qq.com") || host.includes("weixin.qq.com")) {
+    return "公众号";
+  }
+  if (host.includes("toutiao") || host.includes("weibo") || host.includes("xiaohongshu")) {
+    return "自媒体";
+  }
+  return "网站";
+}
+
+function getOpenDiscoverySources() {
+  const sourceMap = new Map();
+
+  appState.articles.forEach((article) => {
+    if (!article || getTrackedSourceForArticle(article)) {
+      return;
+    }
+
+    const sourceName = String(article.sourceName || "").trim() || "开放发现来源";
+    const entryUrl = String(article.originalUrl || "").trim();
+    const domain = deriveDomainFromUrl(entryUrl);
+    const uniqueKey = `${sourceName}::${domain || entryUrl || article.id}`;
+    const timestamp = new Date(article.crawlTime || article.updatedAt || article.createdAt || article.publishTime || 0).getTime() || 0;
+    const existing = sourceMap.get(uniqueKey);
+
+    if (!existing) {
+      sourceMap.set(uniqueKey, {
+        articleId: article.id,
+        sourceName,
+        sourceType: inferSourceTypeFromUrl(entryUrl),
+        entryUrl,
+        summary: article.summary || createExcerpt(article.cleanText, 88) || "该来源已被开放发现捕捉，可转为重点源继续跟踪。",
+        articleCount: 1,
+        latestTime: article.crawlTime || article.updatedAt || article.createdAt || article.publishTime || "",
+        timestamp
+      });
+      return;
+    }
+
+    existing.articleCount += 1;
+    if (timestamp > existing.timestamp) {
+      existing.articleId = article.id;
+      existing.sourceType = inferSourceTypeFromUrl(entryUrl);
+      existing.entryUrl = entryUrl;
+      existing.summary = article.summary || createExcerpt(article.cleanText, 88) || existing.summary;
+      existing.latestTime = article.crawlTime || article.updatedAt || article.createdAt || article.publishTime || existing.latestTime;
+      existing.timestamp = timestamp;
+    }
+  });
+
+  return Array.from(sourceMap.values())
+    .sort((left, right) => right.timestamp - left.timestamp || right.articleCount - left.articleCount);
+}
+
+function getWorkbenchArticles() {
+  const { articleStatus } = getStatusEnums();
+  const queueIds = new Set(appState.reviewQueueIds);
+  const revisedStatuses = new Set([articleStatus.EDITING, articleStatus.PENDING_APPROVAL, articleStatus.APPROVED]);
+  return appState.articles.filter((article) => queueIds.has(article.id) || revisedStatuses.has(article.status));
+}
+
+function syncForwardActionLabels(categoryId) {
+  const categoryName = getCategoryName(categoryId);
+  if (elements.directForwardButton) {
+    elements.directForwardButton.textContent = `直接发布到${categoryName}`;
+  }
+  if (elements.publishButton) {
+    elements.publishButton.textContent = `发布到${categoryName}`;
+  }
 }
 
 function getStatusEnums() {
@@ -311,8 +459,8 @@ function ensureDirectForwardButton() {
 }
 
 function configureFrontstageLayout() {
-  document.querySelectorAll('a[href="#ai-settings"], a[href="#failure-center"]').forEach((node) => node.remove());
-  ["ai-settings", "failure-center"].forEach((id) => {
+  document.querySelectorAll('a[href="#ai-settings"], a[href="#failure-center"], a[href="#task-center"]').forEach((node) => node.remove());
+  ["ai-settings", "failure-center", "task-center"].forEach((id) => {
     const section = document.querySelector(`#${id}`);
     if (!section) {
       return;
@@ -322,39 +470,23 @@ function configureFrontstageLayout() {
     section.style.display = "none";
   });
 
-  ensureSourceTypeOption(elements.sourceType, "公众号主页", "公众号主页");
-  ensureSourceTypeOption(elements.sourceType, "公众号文章", "公众号文章");
+  ensureSourceTypeOption(elements.sourceType, "公众号", "公众号");
+  ensureSourceTypeOption(elements.sourceType, "自媒体", "自媒体");
 
   upsertHint(
-    document.querySelector("#task-center .form-stack"),
-    "task-structure-hint",
-    "抓取任务由“抓取对象 + 关键词”组成，抓取对象可以是网站、公众号页面、公众号文章或手动录入链接。"
-  );
-  upsertHint(
-    document.querySelector("#source-management .form-stack"),
+    document.querySelector("#source-management .simple-form"),
     "source-structure-hint",
-    "抓取源就是抓取对象，可按白名单持续新增、编辑和停用；当前演示重点是网站与公众号公开内容线索。"
+    "抓取源是抓取对象，可录入网站、公众号和自媒体号；这里只保留网址和一句话简介，方便持续维护。"
   );
   upsertHint(
-    document.querySelector("#keyword-management .form-stack"),
+    document.querySelector("#keyword-management .simple-form"),
     "keyword-structure-hint",
-    "关键词管理支持按行业词、产品词、场景词等维度增减维护，并与整木网资讯栏目建立推荐映射。"
+    "关键词是采集入口，系统会先按关键词在重点抓取源中发现内容，再补充开放发现结果。"
   );
-  upsertHint(
-    document.querySelector("#content-pool"),
-    "content-pool-hint",
-    "内容池展示已抓取入库的文章线索。当前整木网先模拟 3 个资讯栏目：行业资讯、企业资讯、市场动态。选中后可直接转发，也可以先用 AI 编辑后再转发。",
-    "beforeend"
-  );
-
-  const taskPill = document.querySelector("#task-center .pill");
-  if (taskPill) {
-    taskPill.textContent = "关键词 + 抓取对象";
-  }
 
   const sourcePill = document.querySelector("#source-management .pill");
   if (sourcePill) {
-    sourcePill.textContent = "抓取对象可增减";
+    sourcePill.textContent = "抓取对象";
   }
 
   const keywordPill = document.querySelector("#keyword-management .pill");
@@ -364,31 +496,26 @@ function configureFrontstageLayout() {
 
   const poolPill = document.querySelector("#content-pool .pill");
   if (poolPill) {
-    poolPill.textContent = "直接转发 / AI 编辑后转发";
-  }
-
-  const categoryLabel = document.querySelector('label[for="category"]');
-  if (categoryLabel) {
-    categoryLabel.textContent = "整木网资讯栏目";
+    poolPill.textContent = "重点源 / 开放发现";
   }
 
   if (elements.detailEmpty) {
-    elements.detailEmpty.textContent = "从内容池选择一篇文章后，这里会展示原文、AI 辅助结果、整木网资讯栏目选择和转发动作为主的工作流。";
+    elements.detailEmpty.textContent = "从内容池选择文章并送入编审台后，这里会展示修订内容、AI 辅助和发布动作。";
   }
 
   if (elements.saveButton) {
-    elements.saveButton.textContent = "保存 AI 编辑稿";
+    elements.saveButton.textContent = "保存修订稿";
   }
   if (elements.submitButton) {
     elements.submitButton.textContent = "提交复审";
   }
   if (elements.publishButton) {
-    elements.publishButton.textContent = "审核后转发到整木网资讯栏目";
+    elements.publishButton.textContent = "发布到对应栏目";
   }
 
   const reviewTitle = document.querySelector("#editor-workbench .review-box h3");
   if (reviewTitle) {
-    reviewTitle.textContent = "转发与审核";
+    reviewTitle.textContent = "编审动作";
   }
 
   ensureDirectForwardButton();
@@ -396,8 +523,13 @@ function configureFrontstageLayout() {
 
 function selectArticle(articleId, options = {}) {
   appState.selectedArticleId = Number(articleId);
+  if (options.addToQueue && !appState.reviewQueueIds.includes(Number(articleId))) {
+    appState.reviewQueueIds = [...appState.reviewQueueIds, Number(articleId)];
+  }
   renderArticles();
+  renderReviewQueue();
   renderDetail();
+  renderPermissions();
 
   if (options.scrollToWorkbench) {
     document.querySelector("#editor-workbench")?.scrollIntoView({ behavior: "smooth", block: "start" });
@@ -413,6 +545,49 @@ function createExcerpt(text, limit = 120) {
     return normalized;
   }
   return `${normalized.slice(0, limit).trim()}...`;
+}
+
+function normalizeDateValue(value) {
+  const raw = String(value || "").trim();
+  if (!raw) {
+    return null;
+  }
+
+  const normalized = raw
+    .replaceAll("年", "-")
+    .replaceAll("月", "-")
+    .replaceAll("日", "")
+    .replaceAll("/", "-")
+    .replaceAll(".", "-")
+    .replace(/\s+/, "T");
+  const parsed = new Date(normalized);
+  return Number.isNaN(parsed.getTime()) ? null : parsed;
+}
+
+function isCurrentMonthValue(value) {
+  const dateValue = normalizeDateValue(value);
+  if (!dateValue) {
+    return false;
+  }
+
+  const now = new Date();
+  return dateValue.getFullYear() === now.getFullYear() && dateValue.getMonth() === now.getMonth();
+}
+
+function getKeywordCaptureStats(keywordText) {
+  const keyword = String(keywordText || "").trim();
+  return appState.articles.reduce((stats, article) => {
+    const hitKeywords = Array.isArray(article.hitKeywords) ? article.hitKeywords : [];
+    if (!hitKeywords.includes(keyword)) {
+      return stats;
+    }
+
+    stats.total += 1;
+    if (isCurrentMonthValue(article.crawlTime || article.updatedAt || article.createdAt || article.publishTime)) {
+      stats.month += 1;
+    }
+    return stats;
+  }, { total: 0, month: 0 });
 }
 
 function buildArticleDraftPayload(article, autofill = false) {
@@ -436,6 +611,26 @@ function buildArticleDraftPayload(article, autofill = false) {
     seoDescription: elements.seoDescription.value.trim() || (autofill ? (article.seoDescription || createExcerpt(nextSummary || nextContent, 90)) : ""),
     sourceNote: nextSourceNote,
     recommendedCategoryId: Number(elements.category.value) || Number(article.recommendedCategoryId) || Number(appState.categories[0]?.id || 1)
+  };
+}
+
+function buildBatchDraftPayload(article) {
+  const nextTitle = article.newTitle || article.originalTitle || "";
+  const nextSummary = article.summary || createExcerpt(article.cleanText, 110);
+  const nextContent = article.rewrittenContent || article.cleanText || "";
+  const nextTags = Array.isArray(article.tags) && article.tags.length
+    ? article.tags
+    : [...(article.hitKeywords || [])].filter(Boolean);
+
+  return {
+    newTitle: nextTitle,
+    summary: nextSummary,
+    rewrittenContent: nextContent,
+    tags: nextTags,
+    seoTitle: article.seoTitle || nextTitle,
+    seoDescription: article.seoDescription || createExcerpt(nextSummary || nextContent, 90),
+    sourceNote: article.sourceNote || `来源：${article.sourceName}，原文链接与原发布时间已保留。`,
+    recommendedCategoryId: Number(article.recommendedCategoryId) || Number(appState.categories[0]?.id || 1)
   };
 }
 
@@ -605,6 +800,8 @@ async function logout() {
   appState.statusEnums = DEFAULT_STATUS_ENUMS;
   appState.sourcePreview = null;
   appState.selectedArticleId = null;
+  appState.selectedArticleIds = [];
+  appState.reviewQueueIds = [];
   renderAll();
   showLogin();
 }
@@ -615,6 +812,23 @@ function renderSession() {
     return;
   }
   elements.sessionSummary.textContent = `${appState.sessionUser.displayName} / ${appState.sessionUser.role}`;
+}
+
+function renderCollectionStatus() {
+  if (!elements.discoverStatus) {
+    return;
+  }
+
+  const enabledKeywordCount = appState.keywords.filter((item) => item.enabled).length;
+  const enabledSourceCount = appState.sourceSites.filter((item) => item.enabled).length;
+  const latestTask = appState.tasks[0];
+
+  let text = `当前已启用 ${enabledKeywordCount} 个关键词、${enabledSourceCount} 个重点抓取源。系统会优先在重点抓取源中发现内容，再补充重点源之外的公开文章。`;
+  if (latestTask) {
+    text += ` 最近一次采集：${latestTask.startTime || ""}，新增 ${latestTask.successCount} 条，重复 ${latestTask.duplicateCount} 条。`;
+  }
+
+  elements.discoverStatus.textContent = text;
 }
 
 function renderStats() {
@@ -654,6 +868,7 @@ function renderCategoryOptions() {
   } else if (appState.categories[0]) {
     elements.category.value = String(appState.categories[0].id);
   }
+  syncForwardActionLabels(Number(elements.category.value));
 }
 
 function renderTaskForm() {
@@ -672,6 +887,12 @@ function renderTaskForm() {
 }
 
 function renderTasks() {
+  const taskSection = document.querySelector("#task-center");
+  if (taskSection?.hidden || taskSection?.classList.contains("hidden")) {
+    elements.taskList.innerHTML = "";
+    return;
+  }
+
   elements.taskList.innerHTML = appState.tasks
     .map((task) => `
       <article class="stack-item">
@@ -694,26 +915,34 @@ function renderTasks() {
 }
 
 function renderSources() {
-  elements.sourceList.innerHTML = appState.sourceSites
-    .map((item) => {
-      const latestFailure = getLatestFailureForSource(item.id);
-      return `
-        <article class="stack-item">
+  const canManage = isAdminRole();
+  const enabledCount = appState.sourceSites.filter((item) => item.enabled).length;
+  elements.sourceList.innerHTML = appState.sourceSites.length
+    ? appState.sourceSites
+      .map((item) => `
+        <article class="simple-item">
           <div class="list-head">
             <h3>${escapeHtml(item.name)}</h3>
-            <button type="button" class="ghost-button" data-source-edit="${item.id}">编辑</button>
+            ${canManage ? `
+              <div class="article-actions">
+                <button type="button" class="ghost-button" data-source-edit="${item.id}">编辑</button>
+                <button type="button" class="ghost-button" data-source-delete="${item.id}">删除</button>
+              </div>
+            ` : ""}
           </div>
           <div class="meta-row">
             <span>${escapeHtml(item.sourceType)}</span>
-            <span>${escapeHtml(item.domain)}</span>
             <span>${item.enabled ? "已启用" : "未启用"}</span>
           </div>
-          <p class="note-text">${escapeHtml(item.lastResult || "")}</p>
-          <p class="note-text">${latestFailure ? `最近异常：${escapeHtml(latestFailure.stage)} / ${escapeHtml(latestFailure.message)}` : "最近无抓取失败"}</p>
+          <p class="note-text"><a class="article-title" href="${escapeHtml(item.entryUrl)}" target="_blank" rel="noreferrer">${escapeHtml(item.entryUrl)}</a></p>
         </article>
-      `;
-    })
-    .join("");
+      `)
+      .join("")
+    : `<div class="empty-state">当前还没有抓取源。你可以先录入网站、公众号或自媒体号。</div>`;
+
+  if (elements.discoverStatus && enabledCount && !appState.tasks.length) {
+    elements.discoverStatus.textContent = `当前已启用 ${appState.keywords.filter((item) => item.enabled).length} 个关键词、${enabledCount} 个重点抓取源。系统会优先在这些重点源中发现内容，再补充开放发现结果。`;
+  }
 
   elements.sourceList.querySelectorAll("[data-source-edit]").forEach((button) => {
     button.addEventListener("click", () => {
@@ -733,6 +962,13 @@ function renderSources() {
       elements.sourceExcludeRule.value = source.excludeRule || "";
     });
   });
+
+  elements.sourceList.querySelectorAll("[data-source-delete]").forEach((button) => {
+    button.addEventListener("click", () => {
+      deleteSource(Number(button.dataset.sourceDelete)).catch((error) => window.alert(error.message));
+    });
+  });
+
 }
 
 function renderSourcePreview() {
@@ -772,22 +1008,27 @@ function renderSourcePreview() {
 }
 
 function renderKeywords() {
+  const canManage = isAdminRole();
   elements.keywordList.innerHTML = appState.keywords
     .map((item) => {
       const category = appState.categories.find((categoryItem) => categoryItem.id === Number(item.categoryId));
       return `
-        <article class="stack-item">
+        <article class="simple-item">
           <div class="list-head">
             <h3>${escapeHtml(item.keyword)}</h3>
-            <button type="button" class="ghost-button" data-keyword-edit="${item.id}">编辑</button>
+            ${canManage ? `
+              <div class="article-actions">
+                <button type="button" class="ghost-button" data-keyword-edit="${item.id}">编辑</button>
+                <button type="button" class="ghost-button" data-keyword-delete="${item.id}">删除</button>
+              </div>
+            ` : ""}
           </div>
           <div class="meta-row">
             <span>${escapeHtml(item.keywordType)}</span>
-            <span>优先级 ${item.priority}</span>
             <span>${category ? escapeHtml(category.name) : "未分配"}</span>
             <span>命中 ${item.hitCount}</span>
           </div>
-          <p class="note-text">${escapeHtml(item.remark || "未填写备注")}</p>
+          <p class="note-text">${escapeHtml(item.remark || "用于驱动重点源优先采集，并补充开放发现结果")}</p>
         </article>
       `;
     })
@@ -809,6 +1050,78 @@ function renderKeywords() {
       elements.keywordEnabled.checked = Boolean(keyword.enabled);
       elements.keywordExclude.value = keyword.excludeWords || "";
       elements.keywordRemark.value = keyword.remark || "";
+    });
+  });
+
+  elements.keywordList.querySelectorAll("[data-keyword-delete]").forEach((button) => {
+    button.addEventListener("click", () => {
+      deleteKeyword(Number(button.dataset.keywordDelete)).catch((error) => window.alert(error.message));
+    });
+  });
+}
+
+function renderKeywords() {
+  const canManage = isAdminRole();
+  elements.keywordList.innerHTML = appState.keywords.length
+    ? appState.keywords
+      .map((item) => {
+        const stats = getKeywordCaptureStats(item.keyword);
+        return `
+          <article class="simple-item">
+            <div class="list-head">
+              <h3>${escapeHtml(item.keyword)}</h3>
+              <div class="article-actions keyword-actions">
+                <label class="inline-check keyword-toggle">
+                  <input type="checkbox" data-keyword-toggle="${item.id}" ${item.enabled ? "checked" : ""} ${canManage ? "" : "disabled"} />
+                  <span>启用</span>
+                </label>
+                ${canManage ? `
+                  <button type="button" class="ghost-button" data-keyword-edit="${item.id}">编辑</button>
+                  <button type="button" class="ghost-button" data-keyword-delete="${item.id}">删除</button>
+                ` : ""}
+              </div>
+            </div>
+            <div class="meta-row">
+              <span>总抓取量 ${stats.total}</span>
+              <span>本月抓取量 ${stats.month}</span>
+            </div>
+          </article>
+        `;
+      })
+      .join("")
+    : `<div class="empty-state">当前还没有关键词。你可以先新增关键词，再按关键词开始采集。</div>`;
+
+  elements.keywordList.querySelectorAll("[data-keyword-edit]").forEach((button) => {
+    button.addEventListener("click", () => {
+      const keyword = appState.keywords.find((item) => item.id === Number(button.dataset.keywordEdit));
+      if (!keyword) {
+        return;
+      }
+
+      appState.editingKeywordId = keyword.id;
+      elements.keywordId.value = keyword.id;
+      elements.keywordName.value = keyword.keyword;
+      elements.keywordType.value = keyword.keywordType;
+      elements.keywordPriority.value = keyword.priority;
+      elements.keywordCategory.value = keyword.categoryId;
+      elements.keywordEnabled.checked = Boolean(keyword.enabled);
+      elements.keywordExclude.value = keyword.excludeWords || "";
+      elements.keywordRemark.value = keyword.remark || "";
+    });
+  });
+
+  elements.keywordList.querySelectorAll("[data-keyword-delete]").forEach((button) => {
+    button.addEventListener("click", () => {
+      deleteKeyword(Number(button.dataset.keywordDelete)).catch((error) => window.alert(error.message));
+    });
+  });
+
+  elements.keywordList.querySelectorAll("[data-keyword-toggle]").forEach((input) => {
+    input.addEventListener("change", () => {
+      toggleKeywordEnabled(Number(input.dataset.keywordToggle), input.checked).catch((error) => {
+        input.checked = !input.checked;
+        window.alert(error.message);
+      });
     });
   });
 }
@@ -904,56 +1217,166 @@ function getStatusClass(article) {
   return "";
 }
 
+function renderSelectionSummary() {
+  const selectedCount = appState.selectedArticleIds.length;
+  const queueCount = appState.reviewQueueIds.length;
+  const filteredArticles = getFilteredArticles();
+  const trackedCount = filteredArticles.filter((article) => getTrackedSourceForArticle(article)).length;
+  const openCount = filteredArticles.length - trackedCount;
+
+  if (!elements.selectionSummary) {
+    return;
+  }
+
+  if (!selectedCount) {
+    elements.selectionSummary.textContent = `当前未选择文章。内容池已按重点源 ${trackedCount} 篇、开放发现 ${openCount} 篇分开展示；你可以多选后直接发布，或送入编审台修订。`;
+    return;
+  }
+
+  elements.selectionSummary.textContent = `已选择 ${selectedCount} 篇文章，可直接发布到对应栏目，或送入编审台继续 AI 编辑；当前重点源 ${trackedCount} 篇，开放发现 ${openCount} 篇，编审台列表 ${queueCount} 篇。`;
+}
+
 function renderArticles() {
   const articleList = getFilteredArticles();
-  elements.articleList.innerHTML = articleList
-    .map((article) => {
+  const trackedArticles = articleList.filter((article) => getTrackedSourceForArticle(article));
+  const openArticles = articleList.filter((article) => !getTrackedSourceForArticle(article));
+
+  const renderArticleGroup = (articles, mode) => {
+    if (!articles.length) {
+      return `<div class="empty-state">${mode === "tracked" ? "当前还没有重点源文章。先配置抓取源，再按关键词开始采集。" : "当前还没有开放发现文章。系统会通过关键词全网补充抓取公开内容。"}</div>`;
+    }
+
+    return articles.map((article) => {
       const category = appState.categories.find((item) => item.id === Number(article.recommendedCategoryId));
       const isActive = article.id === appState.selectedArticleId;
+      const isSelected = appState.selectedArticleIds.includes(article.id);
       const statusClass = getStatusClass(article);
+      const summary = article.summary || createExcerpt(article.cleanText, 120) || "暂无摘要说明";
+      const promoteButton = mode === "open" && canPromoteSource(article)
+        ? `<button type="button" class="ghost-button" data-promote-source="${article.id}">转为重点源</button>`
+        : "";
 
       return `
-        <article class="article-item ${isActive ? "active" : ""}" data-article-id="${article.id}">
-          <h3>${escapeHtml(article.originalTitle)}</h3>
-          <div class="meta-row">
-            <span>${escapeHtml(article.sourceName)}</span>
-            <span>${escapeHtml(article.publishTime)}</span>
-            <span>命中：${escapeHtml(article.hitKeywords.join(" / "))}</span>
-          </div>
-          <div class="status-row">
-            <span class="status-badge ${statusClass}">${escapeHtml(article.status)}</span>
-            <span class="meta-row">
-              <span>${escapeHtml(article.duplicateStatus)}</span>
-              <span>相似度 ${article.similarityScore}%</span>
-              <span>${category ? escapeHtml(category.name) : "未分配"}</span>
-            </span>
+        <article class="simple-item ${isActive ? "active" : ""} ${isSelected ? "selected" : ""}" data-article-id="${article.id}">
+          <div class="article-row">
+            <label class="article-check">
+              <input type="checkbox" data-article-check="${article.id}" ${isSelected ? "checked" : ""} />
+            </label>
+            <div>
+              <a class="article-title" href="${escapeHtml(article.originalUrl)}" target="_blank" rel="noreferrer">${escapeHtml(article.originalTitle)}</a>
+              <div class="meta-row">
+                <span>${escapeHtml(article.sourceName)}</span>
+                <span>${escapeHtml(article.publishTime)}</span>
+                <span>${category ? escapeHtml(category.name) : "未分配栏目"}</span>
+                <span>命中：${escapeHtml(article.hitKeywords.join(" / "))}</span>
+              </div>
+              <p class="note-text">${escapeHtml(summary)}</p>
+            </div>
+            <div class="article-actions">
+              <span class="status-badge ${statusClass}">${escapeHtml(article.status)}</span>
+              ${promoteButton}
+            </div>
           </div>
         </article>
       `;
-    })
-    .join("");
+    }).join("");
+  };
+
+  elements.articleList.innerHTML = `
+    <div class="content-split-grid">
+      <section class="content-subpanel">
+        <div class="subpanel-head">
+          <h4>重点源</h4>
+          <span class="pill">抓取源文章 ${trackedArticles.length}</span>
+        </div>
+        <div class="simple-list article-link-list">${renderArticleGroup(trackedArticles, "tracked")}</div>
+      </section>
+      <section class="content-subpanel">
+        <div class="subpanel-head">
+          <h4>开放发现</h4>
+          <span class="pill">关键词全网发现 ${openArticles.length}</span>
+        </div>
+        <div class="simple-list article-link-list">${renderArticleGroup(openArticles, "open")}</div>
+      </section>
+    </div>
+  `;
+
+  renderSelectionSummary();
 
   elements.articleList.querySelectorAll("[data-article-id]").forEach((node) => {
     node.addEventListener("click", () => {
-      appState.selectedArticleId = Number(node.dataset.articleId);
+      selectArticle(Number(node.dataset.articleId));
+    });
+  });
+
+  elements.articleList.querySelectorAll("[data-article-check]").forEach((node) => {
+    node.addEventListener("click", (event) => {
+      event.stopPropagation();
+    });
+    node.addEventListener("change", () => {
+      toggleArticleSelection(Number(node.dataset.articleCheck));
       renderArticles();
-      renderDetail();
+      renderReviewQueue();
+      renderPermissions();
+    });
+  });
+
+  elements.articleList.querySelectorAll("[data-promote-source]").forEach((node) => {
+    node.addEventListener("click", (event) => {
+      event.stopPropagation();
+      promoteArticleSource(Number(node.dataset.promoteSource)).catch((error) => window.alert(error.message));
     });
   });
 }
 
-function renderLogs() {
-  elements.logList.innerHTML = appState.logs
-    .map((log) => `
-      <article class="stack-item">
-        <h3>${escapeHtml(log.type)}</h3>
-        <p class="note-text">${escapeHtml(log.message)}</p>
+function renderReviewQueue() {
+  const queueArticles = getWorkbenchArticles();
+  elements.reviewQueue.innerHTML = queueArticles.length
+    ? queueArticles
+      .map((article) => `
+        <article class="simple-item ${article.id === appState.selectedArticleId ? "active" : ""}" data-queue-article="${article.id}">
+          <h4>${escapeHtml(article.newTitle || article.originalTitle)}</h4>
+          <div class="meta-row">
+            <span>${escapeHtml(getPortalCategoryTargetName(article))}</span>
+            <span>${escapeHtml(article.status)}</span>
+            <span>${escapeHtml(article.updatedAt || article.createdAt || "")}</span>
+          </div>
+          <p class="note-text">${escapeHtml(article.summary || createExcerpt(article.cleanText, 90) || "尚未修订摘要")}</p>
+        </article>
+      `)
+      .join("")
+    : '<div class="empty-state">从内容池选择文章并送入编审台后，这里会形成修订文章列表。</div>';
+
+  elements.reviewQueue.querySelectorAll("[data-queue-article]").forEach((node) => {
+    node.addEventListener("click", () => {
+      selectArticle(Number(node.dataset.queueArticle), { scrollToWorkbench: false });
+    });
+  });
+}
+
+function renderPublishBoard() {
+  const publishedArticles = appState.articles
+    .filter((article) => article.portalUrl)
+    .slice()
+    .sort((left, right) => new Date(right.updatedAt || right.createdAt || 0) - new Date(left.updatedAt || left.createdAt || 0));
+  elements.publishBoardSummary.innerHTML = "";
+
+  elements.publishBoardList.innerHTML = publishedArticles
+    .map((article) => `
+      <article class="simple-item">
+        <div class="list-head">
+          <h3>${escapeHtml(article.newTitle || article.originalTitle)}</h3>
+          <span class="status-badge good">${escapeHtml(getPortalCategoryTargetName(article))}</span>
+        </div>
+        <p class="note-text"><a class="article-title" href="${escapeHtml(article.portalUrl || "#")}" target="_blank" rel="noreferrer">${escapeHtml(article.portalUrl || "未生成主站链接")}</a></p>
         <div class="meta-row">
-          <span>${escapeHtml(log.createdAt)}</span>
+          <span>${escapeHtml(article.sourceName)}</span>
+          <span>${escapeHtml(article.updatedAt || article.createdAt || "")}</span>
         </div>
       </article>
     `)
-    .join("");
+    .join("")
+    || '<div class="empty-state">发布榜会在文章发布到整木网模拟栏目后，按日期倒序展示结果。</div>';
 }
 
 function renderDetail() {
@@ -971,7 +1394,7 @@ function renderDetail() {
   elements.detailEmpty.classList.add("hidden");
   elements.detailPanel.classList.remove("hidden");
   elements.detailStatus.textContent = `${article.status} / ${article.publishStatus}`;
-  elements.detailSource.textContent = `${article.sourceName} / ${article.authorName}`;
+  elements.detailSource.textContent = `${article.sourceName} / ${getArticleCollectionMode(article)}`;
   elements.detailUrl.textContent = article.originalUrl;
   elements.detailUrl.href = article.originalUrl;
   elements.detailTime.textContent = `${article.publishTime} 原文发布时间 / ${article.crawlTime} 抓取时间`;
@@ -988,14 +1411,9 @@ function renderDetail() {
   elements.reviewComment.value = article.reviewComment || "";
   const categoryName = getCategoryName(article.recommendedCategoryId);
   elements.publishResult.textContent = article.portalUrl
-    ? `已转发到整木网${categoryName}：${article.portalUrl}（主站 ID：${article.portalArticleId}）`
+    ? `已发布到${categoryName}：${article.portalUrl}（主站 ID：${article.portalArticleId}）`
     : "";
-  if (elements.directForwardButton) {
-    elements.directForwardButton.textContent = `直接转发到${categoryName}`;
-  }
-  if (elements.publishButton) {
-    elements.publishButton.textContent = `审核后转发到${categoryName}`;
-  }
+  syncForwardActionLabels(Number(elements.category.value) || article.recommendedCategoryId);
   elements.keepDuplicateButton.classList.toggle(
     "hidden",
     !(article.duplicateStatus === duplicateStatus.SUSPECTED && canDecideDuplicate())
@@ -1036,6 +1454,7 @@ function renderDetail() {
 function renderPermissions() {
   const adminDisabled = !isAdminRole();
   [
+    elements.discoverButton,
     elements.taskSource,
     elements.taskKeepSuspected,
     elements.runTaskButton,
@@ -1074,6 +1493,19 @@ function renderPermissions() {
   elements.taskKeywordList.querySelectorAll("input").forEach((input) => {
     input.disabled = adminDisabled || input.dataset.enabled !== "1";
   });
+
+  if (elements.selectAllButton) {
+    elements.selectAllButton.disabled = !appState.articles.length;
+  }
+  if (elements.clearSelectedButton) {
+    elements.clearSelectedButton.disabled = !appState.selectedArticleIds.length;
+  }
+  if (elements.sendToWorkbenchButton) {
+    elements.sendToWorkbenchButton.disabled = !isEditorRole() || !(appState.selectedArticleIds.length || appState.selectedArticleId);
+  }
+  if (elements.batchForwardButton) {
+    elements.batchForwardButton.disabled = !isReviewerRole() || !(appState.selectedArticleIds.length || appState.selectedArticleId);
+  }
 }
 
 function resetSourceForm() {
@@ -1123,14 +1555,17 @@ function refreshData(payload) {
     publishStatus: { ...DEFAULT_STATUS_ENUMS.publishStatus, ...(payloadStatusEnums.publishStatus || {}) },
     duplicateStatus: { ...DEFAULT_STATUS_ENUMS.duplicateStatus, ...(payloadStatusEnums.duplicateStatus || {}) }
   };
-  appState.selectedArticleId = appState.articles.some((item) => item.id === previousSelectedArticleId)
-    ? previousSelectedArticleId
-    : appState.articles[0]?.id || null;
+  if (!appState.selectedArticleIds.length && previousSelectedArticleId) {
+    appState.selectedArticleIds = [previousSelectedArticleId];
+  }
+  appState.selectedArticleId = previousSelectedArticleId;
+  syncArticleState();
   renderAll();
 }
 
 function renderAll() {
   renderSession();
+  renderCollectionStatus();
   renderStats();
   renderCategoryOptions();
   renderTaskForm();
@@ -1142,7 +1577,8 @@ function renderAll() {
   renderFailures();
   renderFilterOptions();
   renderArticles();
-  renderLogs();
+  renderReviewQueue();
+  renderPublishBoard();
   renderDetail();
   renderPermissions();
 }
@@ -1162,17 +1598,19 @@ async function loadBootstrap() {
 }
 
 async function saveSource() {
+  const entryUrl = elements.sourceEntryUrl.value.trim();
+  const derivedDomain = deriveDomainFromUrl(entryUrl);
   const payload = await request("/api/sources/save", {
     method: "POST",
     body: JSON.stringify({
       id: appState.editingSourceId,
       name: elements.sourceName.value.trim(),
-      domain: elements.sourceDomain.value.trim(),
+      domain: derivedDomain || elements.sourceDomain.value.trim(),
       sourceType: elements.sourceType.value,
-      entryUrl: elements.sourceEntryUrl.value.trim(),
-      crawlInterval: elements.sourceInterval.value.trim(),
+      entryUrl,
+      crawlInterval: elements.sourceInterval.value.trim() || "每天 09:00",
       enabled: elements.sourceEnabled.checked,
-      parseRule: elements.sourceParseRule.value.trim(),
+      parseRule: elements.sourceParseRule.value.trim() || "article",
       excludeRule: elements.sourceExcludeRule.value.trim()
     })
   });
@@ -1180,6 +1618,17 @@ async function saveSource() {
   refreshData(payload);
   appState.sourcePreview = null;
   resetSourceForm();
+}
+
+async function deleteSource(sourceId) {
+  const payload = await request("/api/sources/delete", {
+    method: "POST",
+    body: JSON.stringify({ id: Number(sourceId) })
+  });
+  refreshData(payload);
+  if (appState.editingSourceId === Number(sourceId)) {
+    resetSourceForm();
+  }
 }
 
 async function previewSource() {
@@ -1235,6 +1684,43 @@ async function saveKeyword() {
   resetKeywordForm();
 }
 
+async function toggleKeywordEnabled(keywordId, enabled) {
+  const keyword = appState.keywords.find((item) => item.id === Number(keywordId));
+  if (!keyword) {
+    throw new Error("未找到要切换的关键词");
+  }
+
+  const payload = await request("/api/keywords/save", {
+    method: "POST",
+    body: JSON.stringify({
+      id: keyword.id,
+      keyword: keyword.keyword,
+      keywordType: keyword.keywordType,
+      priority: Number(keyword.priority || 1),
+      categoryId: Number(keyword.categoryId || appState.categories[0]?.id || 1),
+      enabled: Boolean(enabled),
+      excludeWords: keyword.excludeWords || "",
+      remark: keyword.remark || ""
+    })
+  });
+
+  refreshData(payload);
+  if (appState.editingKeywordId === keyword.id) {
+    elements.keywordEnabled.checked = Boolean(enabled);
+  }
+}
+
+async function deleteKeyword(keywordId) {
+  const payload = await request("/api/keywords/delete", {
+    method: "POST",
+    body: JSON.stringify({ id: Number(keywordId) })
+  });
+  refreshData(payload);
+  if (appState.editingKeywordId === Number(keywordId)) {
+    resetKeywordForm();
+  }
+}
+
 async function saveAiSettings() {
   const payload = await request("/api/ai/settings/save", {
     method: "POST",
@@ -1263,6 +1749,31 @@ async function runTask() {
     })
   });
 
+  refreshData(payload);
+}
+
+async function runDiscovery() {
+  const keywordIds = appState.keywords.filter((item) => item.enabled).map((item) => item.id);
+  if (!keywordIds.length) {
+    throw new Error("请先至少启用一个关键词后再开始采集");
+  }
+
+  const payload = await request("/api/tasks/discover", {
+    method: "POST",
+    body: JSON.stringify({
+      keywordIds,
+      keepSuspectedDuplicates: true
+    })
+  });
+
+  refreshData(payload);
+  document.querySelector("#content-pool")?.scrollIntoView({ behavior: "smooth", block: "start" });
+}
+
+async function promoteArticleSource(articleId) {
+  const payload = await request(`/api/articles/${Number(articleId)}/promote-source`, {
+    method: "POST"
+  });
   refreshData(payload);
 }
 
@@ -1304,24 +1815,29 @@ async function saveDraft() {
   refreshData(payload);
 }
 
-async function directForwardArticle() {
-  const article = getSelectedArticle();
+async function forwardArticleById(articleId, options = {}) {
+  const article = appState.articles.find((item) => item.id === Number(articleId));
   if (!article) {
-    return;
+    return null;
   }
 
-  const targetCategoryName = getCategoryName(Number(elements.category.value) || article.recommendedCategoryId);
-
-  const forwardComment = elements.reviewComment.value.trim() || (
+  const targetCategoryName = getPortalCategoryTargetName(article);
+  const forwardComment = options.comment || (
     article.duplicateStatus === getStatusEnums().duplicateStatus.SUSPECTED
-      ? `内容池直接转发到整木网${targetCategoryName}，人工确认保留疑似重复并保留来源信息。`
-      : `内容池直接转发到整木网${targetCategoryName}。`
+      ? `内容池直接发布到${targetCategoryName}，人工确认保留疑似重复并保留来源信息。`
+      : `内容池直接发布到${targetCategoryName}。`
   );
 
-  if (isEditorRole()) {
+  if (options.useCurrentEditorDraft && isEditorRole()) {
     const savedPayload = await request(`/api/articles/${article.id}/save`, {
       method: "POST",
       body: JSON.stringify(buildArticleDraftPayload(article, true))
+    });
+    refreshData(savedPayload);
+  } else if (isEditorRole()) {
+    const savedPayload = await request(`/api/articles/${article.id}/save`, {
+      method: "POST",
+      body: JSON.stringify(buildBatchDraftPayload(article))
     });
     refreshData(savedPayload);
   }
@@ -1334,6 +1850,67 @@ async function directForwardArticle() {
     })
   });
   refreshData(publishedPayload);
+  return publishedPayload;
+}
+
+async function directForwardArticle() {
+  const article = getSelectedArticle();
+  if (!article) {
+    return;
+  }
+
+  const targetCategoryName = getCategoryName(Number(elements.category.value) || article.recommendedCategoryId);
+  await forwardArticleById(article.id, {
+    useCurrentEditorDraft: true,
+    comment: elements.reviewComment.value.trim() || (
+      article.duplicateStatus === getStatusEnums().duplicateStatus.SUSPECTED
+        ? `内容池直接发布到${targetCategoryName}，人工确认保留疑似重复并保留来源信息。`
+        : `内容池直接发布到${targetCategoryName}。`
+    )
+  });
+}
+
+async function batchForwardSelectedArticles() {
+  const selectedArticles = getSelectedArticles();
+  const targetArticles = selectedArticles.length ? selectedArticles : [getSelectedArticle()].filter(Boolean);
+
+  if (!targetArticles.length) {
+    throw new Error("请先在内容池中选择至少一篇文章");
+  }
+
+  for (const article of targetArticles) {
+    await forwardArticleById(article.id);
+  }
+
+  appState.selectedArticleIds = targetArticles.map((item) => item.id);
+  renderAll();
+}
+
+function sendSelectedToWorkbench() {
+  const selectedArticles = getSelectedArticles();
+  const targetIds = selectedArticles.length
+    ? selectedArticles.map((item) => item.id)
+    : [appState.selectedArticleId].filter(Boolean);
+
+  if (!targetIds.length) {
+    throw new Error("请先在内容池中选择文章");
+  }
+
+  setSelectedArticles(targetIds);
+  appState.reviewQueueIds = Array.from(new Set([...appState.reviewQueueIds, ...targetIds]));
+  appState.selectedArticleId = targetIds[0];
+  renderAll();
+  document.querySelector("#editor-workbench")?.scrollIntoView({ behavior: "smooth", block: "start" });
+}
+
+function selectAllFilteredArticles() {
+  setSelectedArticles(getFilteredArticles().map((item) => item.id));
+  renderAll();
+}
+
+function clearSelectedArticles() {
+  appState.selectedArticleIds = [];
+  renderAll();
 }
 
 async function submitForReview() {
@@ -1421,11 +1998,32 @@ function bindEvents() {
     saveAiSettings().catch((error) => window.alert(error.message));
   });
 
+  elements.discoverButton.addEventListener("click", () => {
+    runDiscovery().catch((error) => window.alert(error.message));
+  });
+
   elements.runTaskButton.addEventListener("click", () => {
     runTask().catch((error) => window.alert(error.message));
   });
 
+  elements.selectAllButton.addEventListener("click", selectAllFilteredArticles);
+  elements.clearSelectedButton.addEventListener("click", clearSelectedArticles);
+  elements.sendToWorkbenchButton.addEventListener("click", () => {
+    try {
+      sendSelectedToWorkbench();
+    } catch (error) {
+      window.alert(error.message);
+    }
+  });
+  elements.batchForwardButton.addEventListener("click", () => {
+    batchForwardSelectedArticles().catch((error) => window.alert(error.message));
+  });
+
   [elements.filterSearch, elements.filterStatus, elements.filterSource, elements.filterKeyword].forEach(bindFilterEvents);
+
+  elements.category.addEventListener("change", () => {
+    syncForwardActionLabels(Number(elements.category.value));
+  });
 
   document.querySelectorAll("[data-ai-action]").forEach((button) => {
     button.addEventListener("click", () => {
