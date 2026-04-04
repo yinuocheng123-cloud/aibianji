@@ -43,6 +43,7 @@ const STATUS_FILTER_ORDER = [
 
 const appState = {
   sessionUser: null,
+  sessionToken: "",
   dashboard: null,
   sourceSites: [],
   keywords: [],
@@ -154,13 +155,24 @@ const elements = {
 };
 
 async function request(url, options = {}, allowUnauthorized = false) {
+  const sessionToken = getSessionToken();
+  const mergedHeaders = {
+    "Content-Type": "application/json",
+    ...(options.headers || {})
+  };
+
+  if (sessionToken) {
+    mergedHeaders["X-Session-Token"] = sessionToken;
+  }
+
   const response = await fetch(url, {
-    headers: { "Content-Type": "application/json" },
+    headers: mergedHeaders,
     credentials: "same-origin",
     ...options
   });
 
   if (response.status === 401 && !allowUnauthorized) {
+    clearSessionToken();
     showLogin();
     throw new Error("请先登录");
   }
@@ -233,16 +245,67 @@ function hideLogin() {
   document.body.classList.remove("overlay-open");
 }
 
+function readStoredSessionToken() {
+  try {
+    return window.localStorage.getItem("content_center_session_token") || "";
+  } catch (error) {
+    return "";
+  }
+}
+
+function setSessionToken(token) {
+  const nextToken = String(token || "").trim();
+  appState.sessionToken = nextToken;
+  try {
+    if (nextToken) {
+      window.localStorage.setItem("content_center_session_token", nextToken);
+    } else {
+      window.localStorage.removeItem("content_center_session_token");
+    }
+  } catch (error) {
+    // localStorage 在部分嵌入式环境下可能不可用，这里保留内存兜底
+  }
+}
+
+function clearSessionToken() {
+  setSessionToken("");
+}
+
+function getSessionToken() {
+  if (appState.sessionToken) {
+    return appState.sessionToken;
+  }
+
+  const storedToken = readStoredSessionToken();
+  if (storedToken) {
+    appState.sessionToken = storedToken;
+  }
+  return appState.sessionToken;
+}
+
 function applyLoginQueryState() {
   const query = new URLSearchParams(window.location.search);
+  const sessionToken = query.get("session_token");
   const loginError = query.get("login_error");
-  if (!loginError) {
+
+  if (sessionToken) {
+    setSessionToken(sessionToken);
+    query.delete("session_token");
+  }
+
+  if (!loginError && !sessionToken) {
     return;
   }
 
-  elements.loginError.textContent = loginError === "invalid_credentials" ? "用户名或密码错误" : "登录失败，请重试";
-  showLogin();
-  window.history.replaceState(null, "", window.location.pathname);
+  if (loginError) {
+    elements.loginError.textContent = loginError === "invalid_credentials" ? "用户名或密码错误" : "登录失败，请重试";
+    showLogin();
+    query.delete("login_error");
+  }
+
+  const nextQuery = query.toString();
+  const nextUrl = nextQuery ? `${window.location.pathname}?${nextQuery}` : window.location.pathname;
+  window.history.replaceState(null, "", nextUrl);
 }
 
 function handleLoginSubmit() {
@@ -251,7 +314,9 @@ function handleLoginSubmit() {
 
 async function logout() {
   await request("/api/auth/logout", { method: "POST" }, true);
+  clearSessionToken();
   appState.sessionUser = null;
+  appState.sessionToken = "";
   appState.dashboard = null;
   appState.sourceSites = [];
   appState.keywords = [];
@@ -799,6 +864,9 @@ function renderAll() {
 // ========== 第三部分：业务动作与事件绑定 ==========
 async function loadBootstrap() {
   const payload = await request("/api/bootstrap", {}, true);
+  if (payload.sessionToken) {
+    setSessionToken(payload.sessionToken);
+  }
   hideLogin();
   refreshData(payload);
 }

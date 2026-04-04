@@ -39,7 +39,8 @@ function createApiRouter({ sessions, store, aiService, crawlService }) {
 
   function getCurrentUser(request) {
     const cookies = parseCookies(request);
-    const token = cookies[SESSION_COOKIE];
+    const headerToken = String(request.headers["x-session-token"] || "").trim();
+    const token = cookies[SESSION_COOKIE] || headerToken;
     if (!token || !sessions.has(token)) {
       return null;
     }
@@ -87,10 +88,11 @@ function createApiRouter({ sessions, store, aiService, crawlService }) {
     };
   }
 
-  function buildBootstrapPayload(user) {
+  function buildBootstrapPayload(user, sessionToken = "") {
     const state = store.getState();
     return {
       sessionUser: sanitizeUser(user),
+      sessionToken,
       dashboard: buildDashboard(),
       sourceSites: [...state.sourceSites].sort((left, right) => Number(right.id) - Number(left.id)),
       keywords: [...state.keywords].sort((left, right) => Number(right.priority) - Number(left.priority)),
@@ -173,13 +175,13 @@ function createApiRouter({ sessions, store, aiService, crawlService }) {
       store.appendLog(LOG_TYPES.LOGIN, `${user.displayName} 登录系统。`);
       if (formLogin) {
         response.writeHead(302, {
-          Location: "/",
+          Location: `/?session_token=${encodeURIComponent(token)}`,
           "Set-Cookie": toSetCookie(token)
         });
         response.end();
         return;
       }
-      sendJson(response, 200, buildBootstrapPayload(user), { "Set-Cookie": toSetCookie(token) });
+      sendJson(response, 200, buildBootstrapPayload(user, token), { "Set-Cookie": toSetCookie(token) });
       return;
     }
 
