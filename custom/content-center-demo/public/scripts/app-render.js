@@ -165,7 +165,7 @@ function renderKeywords() {
         `;
       })
       .join("")
-    : `<div class="empty-state">当前还没有关键词。你可以先新增关键词，再按关键词开始采集。</div>`;
+    : `<div class="empty-state">${FRONTSTAGE_COPY.empty.keywords}</div>`;
 
   elements.keywordList.querySelectorAll("[data-keyword-edit]").forEach((button) => {
     button.addEventListener("click", () => {
@@ -311,7 +311,7 @@ function renderSources() {
         </article>
       `)
       .join("")
-    : '<div class="empty-state">当前还没有抓取源。你可以先录入网站、公众号或自媒体号。</div>';
+    : `<div class="empty-state">${FRONTSTAGE_COPY.empty.sources}</div>`;
 
   if (elements.discoverStatus) {
     elements.discoverStatus.textContent = `已启用 ${enabledKeywords} 个关键词，${enabledSources} 个抓取对象。系统先抓重点源，再补开放发现。`;
@@ -355,8 +355,8 @@ function renderSelectionSummary() {
   }
 
   const noteText = selectedCount
-    ? "所选文章可直接发布，也可送入编审台继续修订。"
-    : "可多选后直接发布，或送入编审台继续修订。";
+    ? FRONTSTAGE_COPY.selection.active
+    : FRONTSTAGE_COPY.selection.idle;
 
   elements.selectionSummary.innerHTML = `
     <div class="summary-metrics">
@@ -389,7 +389,7 @@ function renderArticles() {
 
   const renderArticleGroup = (articles, mode) => {
     if (!articles.length) {
-      return `<div class="empty-state">${mode === "tracked" ? "当前还没有重点源文章。" : "当前还没有开放发现文章。"}</div>`;
+      return `<div class="empty-state">${mode === "tracked" ? FRONTSTAGE_COPY.empty.trackedArticles : FRONTSTAGE_COPY.empty.openArticles}</div>`;
     }
 
     return articles
@@ -493,7 +493,7 @@ function renderReviewQueue() {
         </article>
       `)
       .join("")
-    : '<div class="empty-state">从内容池选择文章并送入编审台后，这里会形成修订文章列表。</div>';
+    : `<div class="empty-state">${FRONTSTAGE_COPY.empty.reviewQueue}</div>`;
 
   elements.reviewQueue.querySelectorAll("[data-queue-article]").forEach((node) => {
     node.addEventListener("click", () => {
@@ -657,7 +657,7 @@ function renderPublishBoard() {
   elements.publishBoardSummary.innerHTML = "";
 
   if (!publishedArticles.length) {
-    elements.publishBoardList.innerHTML = '<div class="empty-state">发布榜会在文章发布到整木网模拟栏目后，按日期倒序展示结果。</div>';
+    elements.publishBoardList.innerHTML = `<div class="empty-state">${FRONTSTAGE_COPY.empty.publishBoard}</div>`;
     return;
   }
 

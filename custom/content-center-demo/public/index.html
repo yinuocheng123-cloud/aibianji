@@ -16,7 +16,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>整木网编辑中台 MVP</title>
     <link rel="icon" href="data:," />
-    <link rel="stylesheet" href="/styles.css?v=20260404-v34-front-modular" />
+    <link rel="stylesheet" href="/styles.css?v=20260404-v35-front-copy-unify" />
   </head>
   <body>
     <div id="login-overlay" class="login-overlay">
@@ -80,7 +80,7 @@
           <div class="card-head">
             <div>
               <h2>信息源</h2>
-              <p class="note-text section-note">系统采用“关键词驱动 + 重点源优先 + 开放发现补充”的采集模式。这里先配置关键词，再维护重点抓取源。</p>
+              <p class="note-text section-note">先配置关键词，再维护抓取对象。系统会先抓重点源，再补开放发现。</p>
             </div>
             <span class="pill accent">关键词驱动采集</span>
           </div>
@@ -96,7 +96,7 @@
             <section class="simple-panel" id="keyword-management">
               <div class="panel-head">
                 <h3>关键词</h3>
-                <span class="pill">可删减</span>
+                <span class="pill">关键词可增减</span>
               </div>
               <div class="simple-form">
                 <input id="keyword-id" type="hidden" />
@@ -197,7 +197,7 @@
           <div class="card-head">
             <div>
               <h2>内容池</h2>
-              <p class="note-text section-note">内容池按重点源与开放发现分开展示。重点源是抓取源中的文章，开放发现是系统按关键词补充抓取的公开文章。</p>
+              <p class="note-text section-note">内容池分为重点源和开放发现，可多选直接发布，也可送入编审台继续修订。</p>
             </div>
             <span class="pill accent">重点源 / 开放发现</span>
           </div>
@@ -211,11 +211,11 @@
               <button id="select-all-button" class="secondary" type="button">全选</button>
               <button id="clear-selected-button" class="secondary" type="button">清空</button>
               <button id="send-to-workbench-button" class="secondary" type="button">送入编审台</button>
-              <button id="batch-forward-button" type="button">直接发布到栏目</button>
+              <button id="batch-forward-button" type="button">直接发布所选</button>
             </div>
           </div>
 
-          <div id="selection-summary" class="selection-summary">当前未选择文章，可在列表中多选后直接发布、送入编审台，或把开放发现的新来源转为重点抓取源。</div>
+          <div id="selection-summary" class="selection-summary">可多选后直接发布，或送入编审台继续修订。</div>
 
           <div class="hidden">
             <select id="filter-status"></select>
@@ -230,7 +230,7 @@
           <div class="card-head">
             <div>
               <h2>编审台</h2>
-              <p class="note-text section-note">左侧是修订文章列表，右侧按原文参考、AI 处理、修订内容和发布动作分区展示。</p>
+              <p class="note-text section-note">编审台显示修订文章列表，选中文章后可在线编辑并直接发布到对应栏目。</p>
             </div>
             <span id="detail-status" class="pill">未选择内容</span>
           </div>
@@ -246,7 +246,7 @@
 
             <div class="workbench-detail-panel">
               <div id="detail-empty" class="empty-state">
-                从内容池选择文章，送入编审台后会在左侧形成修订列表；点击任一文章即可在这里在线编辑。
+                从内容池选择文章并送入编审台后，这里会展示修订内容、AI 辅助和发布动作。
               </div>
 
               <div id="detail-panel" class="detail-panel hidden">
@@ -357,7 +357,7 @@
                   </div>
 
                   <div class="review-box compact-review-box">
-                    <h3>编审意见</h3>
+                    <h3>编审动作</h3>
                     <textarea id="review-comment" rows="2" placeholder="填写编审意见、发布备注或保留疑似稿理由"></textarea>
                     <div class="toolbar compact-actions">
                       <button id="approve-button" class="secondary" type="button">审核通过</button>
@@ -417,11 +417,11 @@
       </article>
     </template>
 
-    <script src="/scripts/app-state.js?v=20260404-v34-front-modular"></script>
-    <script src="/scripts/app-session.js?v=20260404-v34-front-modular"></script>
-    <script src="/scripts/app-utils.js?v=20260404-v34-front-modular"></script>
-    <script src="/scripts/app-render.js?v=20260404-v34-front-modular"></script>
-    <script src="/scripts/app-actions.js?v=20260404-v34-front-modular"></script>
-    <script src="/app.js?v=20260404-v34-front-modular"></script>
+    <script src="/scripts/app-state.js?v=20260404-v35-front-copy-unify"></script>
+    <script src="/scripts/app-session.js?v=20260404-v35-front-copy-unify"></script>
+    <script src="/scripts/app-utils.js?v=20260404-v35-front-copy-unify"></script>
+    <script src="/scripts/app-render.js?v=20260404-v35-front-copy-unify"></script>
+    <script src="/scripts/app-actions.js?v=20260404-v35-front-copy-unify"></script>
+    <script src="/app.js?v=20260404-v35-front-copy-unify"></script>
   </body>
 </html>

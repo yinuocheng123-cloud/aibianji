@@ -41,6 +41,42 @@ const STATUS_FILTER_ORDER = [
   "REJECTED"
 ];
 
+const FRONTSTAGE_COPY = {
+  notes: {
+    sourceHub: "先配置关键词，再维护抓取对象。系统会先抓重点源，再补开放发现。",
+    contentPool: "内容池分为重点源和开放发现，可多选直接发布，也可送入编审台继续修订。",
+    workbench: "编审台显示修订文章列表，选中文章后可在线编辑并直接发布到对应栏目。",
+    publishBoard: "只展示已经发布的文章列表，按日期倒序排列。"
+  },
+  empty: {
+    keywords: "当前还没有关键词。你可以先新增关键词，再按关键词开始采集。",
+    sources: "当前还没有抓取源。你可以先录入网站、公众号或自媒体号。",
+    trackedArticles: "当前还没有重点源文章。",
+    openArticles: "当前还没有开放发现文章。",
+    reviewQueue: "从内容池选择文章并送入编审台后，这里会形成修订文章列表。",
+    detailPanel: "从内容池选择文章并送入编审台后，这里会展示修订内容、AI 辅助和发布动作。",
+    publishBoard: "发布榜会在文章发布到整木网模拟栏目后，按日期倒序展示结果。"
+  },
+  selection: {
+    idle: "可多选后直接发布，或送入编审台继续修订。",
+    active: "所选文章可直接发布，也可送入编审台继续修订。"
+  },
+  actions: {
+    saveDraft: "保存修订稿",
+    submitReview: "提交复审",
+    reviewPanelTitle: "编审动作",
+    publishGeneric: "发布到对应栏目",
+    directForwardDefault: "直接发布到整木网资讯栏目",
+    batchForward: "直接发布所选",
+    sendToWorkbench: "送入编审台"
+  },
+  labels: {
+    sourcePill: "抓取对象",
+    keywordPill: "关键词可增减",
+    poolPill: "重点源 / 开放发现"
+  }
+};
+
 // ========== 第二部分：运行时状态 ==========
 const appState = {
   sessionUser: null,

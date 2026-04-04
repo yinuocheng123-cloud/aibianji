@@ -342,7 +342,7 @@ function ensureDirectForwardButton() {
   const button = document.createElement("button");
   button.id = "direct-forward-button";
   button.type = "button";
-  button.textContent = "直接发布到整木网资讯栏目";
+  button.textContent = FRONTSTAGE_COPY.actions.directForwardDefault;
   toolbar.prepend(button);
   elements.directForwardButton = button;
   return button;
@@ -365,51 +365,64 @@ function configureFrontstageLayout() {
 
   const sourcePill = document.querySelector("#source-management .pill");
   if (sourcePill) {
-    sourcePill.textContent = "抓取对象";
+    sourcePill.textContent = FRONTSTAGE_COPY.labels.sourcePill;
   }
 
   const keywordPill = document.querySelector("#keyword-management .pill");
   if (keywordPill) {
-    keywordPill.textContent = "关键词可增减";
+    keywordPill.textContent = FRONTSTAGE_COPY.labels.keywordPill;
   }
 
   const poolPill = document.querySelector("#content-pool .pill");
   if (poolPill) {
-    poolPill.textContent = "重点源 / 开放发现";
+    poolPill.textContent = FRONTSTAGE_COPY.labels.poolPill;
   }
 
   const sourceHubNote = document.querySelector("#source-hub .section-note");
   if (sourceHubNote) {
-    sourceHubNote.textContent = "先配置关键词，再维护抓取对象。系统会先抓重点源，再补开放发现。";
+    sourceHubNote.textContent = FRONTSTAGE_COPY.notes.sourceHub;
   }
 
   const poolNote = document.querySelector("#content-pool .section-note");
   if (poolNote) {
-    poolNote.textContent = "内容池分为重点源和开放发现，可多选直接发布，也可送入编审台继续修订。";
+    poolNote.textContent = FRONTSTAGE_COPY.notes.contentPool;
   }
 
   const workbenchNote = document.querySelector("#editor-workbench .section-note");
   if (workbenchNote) {
-    workbenchNote.textContent = "编审台显示修订文章列表，选中文章后可在线编辑并直接发布到对应栏目。";
+    workbenchNote.textContent = FRONTSTAGE_COPY.notes.workbench;
   }
 
   if (elements.detailEmpty) {
-    elements.detailEmpty.textContent = "从内容池选择文章并送入编审台后，这里会展示修订内容、AI 辅助和发布动作。";
+    elements.detailEmpty.textContent = FRONTSTAGE_COPY.empty.detailPanel;
   }
 
   if (elements.saveButton) {
-    elements.saveButton.textContent = "保存修订稿";
+    elements.saveButton.textContent = FRONTSTAGE_COPY.actions.saveDraft;
   }
   if (elements.submitButton) {
-    elements.submitButton.textContent = "提交复审";
+    elements.submitButton.textContent = FRONTSTAGE_COPY.actions.submitReview;
   }
   if (elements.publishButton) {
-    elements.publishButton.textContent = "发布到对应栏目";
+    elements.publishButton.textContent = FRONTSTAGE_COPY.actions.publishGeneric;
+  }
+
+  if (elements.batchForwardButton) {
+    elements.batchForwardButton.textContent = FRONTSTAGE_COPY.actions.batchForward;
+  }
+
+  if (elements.sendToWorkbenchButton) {
+    elements.sendToWorkbenchButton.textContent = FRONTSTAGE_COPY.actions.sendToWorkbench;
   }
 
   const reviewTitle = document.querySelector("#editor-workbench .review-box h3");
   if (reviewTitle) {
-    reviewTitle.textContent = "编审动作";
+    reviewTitle.textContent = FRONTSTAGE_COPY.actions.reviewPanelTitle;
+  }
+
+  const publishBoardNote = document.querySelector("#publish-board .section-note");
+  if (publishBoardNote) {
+    publishBoardNote.textContent = FRONTSTAGE_COPY.notes.publishBoard;
   }
 
   ensureDirectForwardButton();
