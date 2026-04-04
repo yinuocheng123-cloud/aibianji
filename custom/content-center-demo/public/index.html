@@ -16,7 +16,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>整木网编辑中台 MVP</title>
     <link rel="icon" href="data:," />
-    <link rel="stylesheet" href="/styles.css?v=20260404-v29-content-pool-split" />
+    <link rel="stylesheet" href="/styles.css?v=20260404-v34-front-modular" />
   </head>
   <body>
     <div id="login-overlay" class="login-overlay">
@@ -86,7 +86,7 @@
           </div>
 
           <div class="source-action-bar">
-            <p id="discover-status" class="collection-note">系统会优先在重点抓取源中发现内容，再按关键词补充重点源之外的公开文章。</p>
+            <p id="discover-status" class="collection-note">已启用关键词和抓取对象后，系统会先抓重点源，再补开放发现。</p>
             <div class="toolbar compact-toolbar">
               <button id="discover-button" type="button">按关键词开始采集</button>
             </div>
@@ -230,7 +230,7 @@
           <div class="card-head">
             <div>
               <h2>编审台</h2>
-              <p class="note-text section-note">左侧是进入编审台的文章列表，右侧可在线编辑、AI 修订并直接发布到对应栏目。</p>
+              <p class="note-text section-note">左侧是修订文章列表，右侧按原文参考、AI 处理、修订内容和发布动作分区展示。</p>
             </div>
             <span id="detail-status" class="pill">未选择内容</span>
           </div>
@@ -269,84 +269,107 @@
                   </div>
                 </div>
 
-                <div class="editor-block">
-                  <label>原文标题</label>
-                  <div id="original-title" class="read-box"></div>
-                </div>
-
-                <div class="editor-block">
-                  <label>原文摘要</label>
-                  <div id="clean-text" class="read-box long"></div>
-                </div>
-
-                <div class="ai-actions">
-                  <button data-ai-action="summary" type="button">生成摘要</button>
-                  <button data-ai-action="title" type="button">生成标题</button>
-                  <button data-ai-action="rewrite" type="button">正文改写</button>
-                  <button data-ai-action="expand" type="button">扩写稿件</button>
-                </div>
-
-                <div class="editor-block">
-                  <label for="new-title">修订标题</label>
-                  <input id="new-title" type="text" />
-                </div>
-
-                <div class="editor-block">
-                  <label for="summary">修订摘要</label>
-                  <textarea id="summary" rows="3"></textarea>
-                </div>
-
-                <div class="editor-block">
-                  <label for="rewritten-content">修订正文</label>
-                  <textarea id="rewritten-content" rows="8"></textarea>
-                </div>
-
-                <div class="editor-grid">
-                  <div class="editor-block">
-                    <label for="category">整木网栏目</label>
-                    <select id="category"></select>
+                <section class="editor-section">
+                  <div class="section-mini-head">
+                    <h3>原文参考</h3>
+                    <span class="pill">只读</span>
                   </div>
                   <div class="editor-block">
-                    <label for="tags">标签</label>
-                    <input id="tags" type="text" />
+                    <label>原文标题</label>
+                    <div id="original-title" class="read-box"></div>
                   </div>
-                </div>
+                  <div class="editor-block compact-gap">
+                    <label>原文摘要</label>
+                    <div id="clean-text" class="read-box long"></div>
+                  </div>
+                </section>
 
-                <div class="editor-grid">
+                <section class="editor-section">
+                  <div class="section-mini-head">
+                    <h3>AI 快捷处理</h3>
+                    <span class="pill">辅助编辑</span>
+                  </div>
+                  <div class="ai-actions compact-actions">
+                    <button data-ai-action="summary" type="button">生成摘要</button>
+                    <button data-ai-action="title" type="button">生成标题</button>
+                    <button data-ai-action="rewrite" type="button">正文改写</button>
+                    <button data-ai-action="expand" type="button">扩写稿件</button>
+                  </div>
+                </section>
+
+                <section class="editor-section">
+                  <div class="section-mini-head">
+                    <h3>修订内容</h3>
+                    <span class="pill">在线编辑</span>
+                  </div>
                   <div class="editor-block">
-                    <label for="seo-title">SEO 标题</label>
-                    <input id="seo-title" type="text" />
+                    <label for="new-title">修订标题</label>
+                    <input id="new-title" type="text" />
                   </div>
-                  <div class="editor-block">
-                    <label for="seo-description">SEO 描述</label>
-                    <input id="seo-description" type="text" />
+                  <div class="editor-block compact-gap">
+                    <label for="summary">修订摘要</label>
+                    <textarea id="summary" rows="3"></textarea>
                   </div>
-                </div>
-
-                <div class="editor-block">
-                  <label for="source-note">来源说明</label>
-                  <textarea id="source-note" rows="2"></textarea>
-                </div>
-
-                <div class="toolbar">
-                  <button id="save-button" class="secondary" type="button">保存修订稿</button>
-                  <button id="submit-button" type="button">提交复审</button>
-                  <button id="keep-duplicate-button" class="secondary hidden" type="button">保留疑似稿</button>
-                </div>
-
-                <div class="review-box">
-                  <h3>编审动作</h3>
-                  <textarea id="review-comment" rows="2" placeholder="填写编审意见、发布备注或保留疑似稿理由"></textarea>
-                  <div class="toolbar">
-                    <button id="approve-button" class="secondary" type="button">审核通过</button>
-                    <button id="reject-button" class="danger" type="button">驳回修改</button>
-                    <button id="publish-button" type="button">发布到对应栏目</button>
-                    <button id="archive-button" class="secondary" type="button">归档</button>
+                  <div class="editor-block compact-gap">
+                    <label for="rewritten-content">修订正文</label>
+                    <textarea id="rewritten-content" rows="8"></textarea>
                   </div>
-                  <div id="publish-result" class="publish-result"></div>
-                </div>
+                </section>
 
-                <div class="history-box">
+                <section class="editor-section">
+                  <div class="section-mini-head">
+                    <h3>发布设置</h3>
+                    <span class="pill">栏目与 SEO</span>
+                  </div>
+                  <div class="editor-grid compact-editor-grid">
+                    <div class="editor-block">
+                      <label for="category">整木网栏目</label>
+                      <select id="category"></select>
+                    </div>
+                    <div class="editor-block">
+                      <label for="tags">标签</label>
+                      <input id="tags" type="text" />
+                    </div>
+                    <div class="editor-block">
+                      <label for="seo-title">SEO 标题</label>
+                      <input id="seo-title" type="text" />
+                    </div>
+                    <div class="editor-block">
+                      <label for="seo-description">SEO 描述</label>
+                      <input id="seo-description" type="text" />
+                    </div>
+                  </div>
+                  <div class="editor-block compact-gap">
+                    <label for="source-note">来源说明</label>
+                    <textarea id="source-note" rows="2"></textarea>
+                  </div>
+                </section>
+
+                <section class="editor-section editor-actions-section">
+                  <div class="section-mini-head">
+                    <h3>发布动作</h3>
+                    <span class="pill">保存与转发</span>
+                  </div>
+                  <div class="toolbar compact-actions">
+                    <button id="save-button" class="secondary" type="button">保存修订稿</button>
+                    <button id="submit-button" type="button">提交复审</button>
+                    <button id="keep-duplicate-button" class="secondary hidden" type="button">保留疑似稿</button>
+                  </div>
+
+                  <div class="review-box compact-review-box">
+                    <h3>编审意见</h3>
+                    <textarea id="review-comment" rows="2" placeholder="填写编审意见、发布备注或保留疑似稿理由"></textarea>
+                    <div class="toolbar compact-actions">
+                      <button id="approve-button" class="secondary" type="button">审核通过</button>
+                      <button id="reject-button" class="danger" type="button">驳回修改</button>
+                      <button id="publish-button" type="button">发布到对应栏目</button>
+                      <button id="archive-button" class="secondary" type="button">归档</button>
+                    </div>
+                    <div id="publish-result" class="publish-result"></div>
+                  </div>
+                </section>
+
+                <div class="history-box compact-history-box">
                   <h3>AI 与处理记录</h3>
                   <div id="ai-history" class="mini-list"></div>
                 </div>
@@ -394,6 +417,11 @@
       </article>
     </template>
 
-    <script src="/app.js?v=20260404-v29-content-pool-split"></script>
+    <script src="/scripts/app-state.js?v=20260404-v34-front-modular"></script>
+    <script src="/scripts/app-session.js?v=20260404-v34-front-modular"></script>
+    <script src="/scripts/app-utils.js?v=20260404-v34-front-modular"></script>
+    <script src="/scripts/app-render.js?v=20260404-v34-front-modular"></script>
+    <script src="/scripts/app-actions.js?v=20260404-v34-front-modular"></script>
+    <script src="/app.js?v=20260404-v34-front-modular"></script>
   </body>
 </html>
