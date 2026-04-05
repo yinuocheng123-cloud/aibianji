@@ -10,11 +10,7 @@
 
 // ========== 第一部分：基础渲染 ==========
 function renderSession() {
-  if (!appState.sessionUser) {
-    elements.sessionSummary.textContent = "未登录";
-    return;
-  }
-  elements.sessionSummary.textContent = `${appState.sessionUser.displayName} / ${appState.sessionUser.role}`;
+  elements.sessionSummary.textContent = buildSessionSummaryText(appState.sessionUser);
 }
 
 function renderStats() {
@@ -59,7 +55,7 @@ function renderCategoryOptions() {
 
 function renderTaskForm() {
   elements.taskSource.innerHTML = appState.sourceSites
-    .map((item) => `<option value="${item.id}">${escapeHtml(item.name)}${item.enabled ? "" : "（未启用）"}</option>`)
+    .map((item) => `<option value="${item.id}">${escapeHtml(item.name)}${item.enabled ? "" : FRONTSTAGE_COPY.common.optionDisabledSuffix}</option>`)
     .join("");
 
   elements.taskKeywordList.innerHTML = appState.keywords
@@ -84,15 +80,15 @@ function renderTasks() {
       <article class="stack-item">
         <div class="list-head">
           <h3>${escapeHtml(task.taskName)}</h3>
-          <span class="status-badge ${task.status === "已完成" ? "good" : ""}">${escapeHtml(task.status)}</span>
+          <span class="status-badge ${task.status === FRONTSTAGE_COPY.status.taskCompleted ? "good" : ""}">${escapeHtml(task.status)}</span>
         </div>
         <div class="meta-row">
           <span>${escapeHtml(task.sourceName)}</span>
           <span>${escapeHtml(task.taskType)}</span>
-          <span>${task.keepSuspectedDuplicates === false ? "疑似重复跳过" : "疑似重复保留"}</span>
-          <span>新增 ${task.successCount}</span>
-          <span>重复 ${task.duplicateCount}</span>
-          <span>失败 ${task.failCount || 0}</span>
+          <span>${buildTaskDuplicateStrategyText(task)}</span>
+          <span>${buildTaskMetricText(FRONTSTAGE_COPY.labels.taskAdded, task.successCount)}</span>
+          <span>${buildTaskMetricText(FRONTSTAGE_COPY.labels.taskDuplicate, task.duplicateCount)}</span>
+          <span>${buildTaskMetricText(FRONTSTAGE_COPY.labels.taskFailed, task.failCount || 0)}</span>
         </div>
         <p class="note-text">${escapeHtml(task.logText || "")}</p>
       </article>
@@ -119,19 +115,16 @@ function renderSourcePreview() {
     metaParts.push(preview.extractionMode);
   }
   if (preview.isFallback) {
-    metaParts.push("失败兜底展示");
+    metaParts.push(FRONTSTAGE_COPY.status.previewFallback);
   }
   if (preview.errorMessage) {
     metaParts.push(preview.errorMessage);
   }
 
-  let bodyText = preview.cleanText || preview.rawText || responsePreview || "暂无可展示内容";
-  if (preview.isFallback && responsePreview && !bodyText.includes(responsePreview)) {
-    bodyText = `${bodyText}\n\n原始响应摘要：\n${responsePreview}`;
-  }
+  const bodyText = buildPreviewBodyText(preview, responsePreview);
 
   elements.sourcePreview.classList.remove("hidden");
-  elements.sourcePreviewTitle.textContent = preview.title || "未识别标题";
+  elements.sourcePreviewTitle.textContent = preview.title || FRONTSTAGE_COPY.common.unknownTitle;
   elements.sourcePreviewMeta.textContent = metaParts.join(" / ");
   elements.sourcePreviewBody.textContent = bodyText;
 }
@@ -149,17 +142,17 @@ function renderKeywords() {
               <div class="article-actions keyword-actions">
                 <label class="inline-check keyword-toggle">
                   <input type="checkbox" data-keyword-toggle="${item.id}" ${item.enabled ? "checked" : ""} ${canManage ? "" : "disabled"} />
-                  <span>启用</span>
+                  <span>${FRONTSTAGE_COPY.common.enableToggle}</span>
                 </label>
                 ${canManage ? `
-                  <button type="button" class="ghost-button" data-keyword-edit="${item.id}">编辑</button>
-                  <button type="button" class="ghost-button" data-keyword-delete="${item.id}">删除</button>
+                  <button type="button" class="ghost-button" data-keyword-edit="${item.id}">${FRONTSTAGE_COPY.common.edit}</button>
+                  <button type="button" class="ghost-button" data-keyword-delete="${item.id}">${FRONTSTAGE_COPY.common.delete}</button>
                 ` : ""}
               </div>
             </div>
             <div class="meta-row">
-              <span>总抓取量 ${stats.total}</span>
-              <span>本月抓取量 ${stats.month}</span>
+              <span>${buildKeywordMetricText(FRONTSTAGE_COPY.templates.keywordTotal, stats.total)}</span>
+              <span>${buildKeywordMetricText(FRONTSTAGE_COPY.templates.keywordMonthly, stats.month)}</span>
             </div>
           </article>
         `;
@@ -188,7 +181,7 @@ function renderKeywords() {
 
   elements.keywordList.querySelectorAll("[data-keyword-delete]").forEach((button) => {
     button.addEventListener("click", () => {
-      deleteKeyword(Number(button.dataset.keywordDelete)).catch((error) => window.alert(error.message));
+      deleteKeyword(Number(button.dataset.keywordDelete)).catch(showActionError);
     });
   });
 
@@ -196,7 +189,7 @@ function renderKeywords() {
     input.addEventListener("change", () => {
       toggleKeywordEnabled(Number(input.dataset.keywordToggle), input.checked).catch((error) => {
         input.checked = !input.checked;
-        window.alert(error.message);
+        showActionError(error);
       });
     });
   });
@@ -204,7 +197,7 @@ function renderKeywords() {
 
 function renderAiSettings() {
   if (!appState.aiSettings) {
-    elements.aiSettingsStatus.textContent = "仅管理员可查看 AI 配置";
+    elements.aiSettingsStatus.textContent = FRONTSTAGE_COPY.common.aiSettingsHidden;
     elements.aiApiKey.value = "";
     elements.aiBaseUrl.value = "";
     elements.aiDefaultModel.value = "";
@@ -215,9 +208,9 @@ function renderAiSettings() {
     return;
   }
 
-  elements.aiSettingsStatus.textContent = `${appState.aiSettings.source} / API Key：${appState.aiSettings.apiKeyMasked}`;
+  elements.aiSettingsStatus.textContent = buildAiSettingsStatusLabel(appState.aiSettings);
   elements.aiApiKey.value = "";
-  elements.aiApiKey.placeholder = appState.aiSettings.hasApiKey ? `当前：${appState.aiSettings.apiKeyMasked}` : "sk-...";
+  elements.aiApiKey.placeholder = appState.aiSettings.hasApiKey ? `${FRONTSTAGE_COPY.common.currentPrefix}${appState.aiSettings.apiKeyMasked}` : "sk-...";
   elements.aiBaseUrl.value = appState.aiSettings.baseUrl || "";
   elements.aiDefaultModel.value = appState.aiSettings.defaultModel || "";
   elements.aiReasonerModel.value = appState.aiSettings.reasonerModel || "";
@@ -232,12 +225,12 @@ function renderFailures() {
       .map((item) => `
         <article class="stack-item">
           <div class="list-head">
-            <h3>${escapeHtml(item.sourceName || "未命名来源")}</h3>
-            <span class="status-badge warn">${escapeHtml(item.stage || "抓取异常")}</span>
+            <h3>${escapeHtml(item.sourceName || FRONTSTAGE_COPY.common.unnamedSource)}</h3>
+            <span class="status-badge warn">${escapeHtml(item.stage || FRONTSTAGE_COPY.common.crawlFailureStage)}</span>
           </div>
           <p class="note-text">${escapeHtml(item.message || "")}</p>
           <div class="meta-row">
-            <span>${escapeHtml(item.keyword || "未命中关键词")}</span>
+            <span>${escapeHtml(item.keyword || FRONTSTAGE_COPY.common.unmatchedKeyword)}</span>
             <span>${escapeHtml(item.createdAt || "")}</span>
           </div>
         </article>
@@ -245,8 +238,8 @@ function renderFailures() {
       .join("")
     : `
         <article class="stack-item">
-          <h3>暂无失败日志</h3>
-          <p class="note-text">当前白名单抓取、正文提取与关键词命中链路暂未记录异常。</p>
+          <h3>${FRONTSTAGE_COPY.empty.failureList}</h3>
+          <p class="note-text">${FRONTSTAGE_COPY.notes.failureIdle}</p>
         </article>
       `;
 }
@@ -256,11 +249,11 @@ function renderFilterOptions() {
     .map((item) => `<option value="${item.value}">${item.label}</option>`)
     .join("");
   elements.filterSource.innerHTML = [
-    '<option value="">全部来源</option>',
+    `<option value="">${FRONTSTAGE_COPY.templates.filterAllSource}</option>`,
     ...appState.sourceSites.map((item) => `<option value="${item.id}">${escapeHtml(item.name)}</option>`)
   ].join("");
   elements.filterKeyword.innerHTML = [
-    '<option value="">全部关键词</option>',
+    `<option value="">${FRONTSTAGE_COPY.templates.filterAllKeyword}</option>`,
     ...appState.keywords.map((item) => `<option value="${escapeHtml(item.keyword)}">${escapeHtml(item.keyword)}</option>`)
   ].join("");
 
@@ -299,14 +292,14 @@ function renderSources() {
             </div>
             ${canManage ? `
               <div class="article-actions">
-                <button type="button" class="ghost-button" data-source-edit="${item.id}">编辑</button>
-                <button type="button" class="ghost-button" data-source-delete="${item.id}">删除</button>
+                <button type="button" class="ghost-button" data-source-edit="${item.id}">${FRONTSTAGE_COPY.common.edit}</button>
+                <button type="button" class="ghost-button" data-source-delete="${item.id}">${FRONTSTAGE_COPY.common.delete}</button>
               </div>
             ` : ""}
           </div>
           <div class="tag-row">
             <span class="mini-badge">${escapeHtml(item.sourceType)}</span>
-            <span class="mini-badge">${item.enabled ? "已启用" : "未启用"}</span>
+            <span class="mini-badge">${buildSourceEnabledText(item.enabled)}</span>
           </div>
         </article>
       `)
@@ -314,7 +307,7 @@ function renderSources() {
     : `<div class="empty-state">${FRONTSTAGE_COPY.empty.sources}</div>`;
 
   if (elements.discoverStatus) {
-    elements.discoverStatus.textContent = `已启用 ${enabledKeywords} 个关键词，${enabledSources} 个抓取对象。系统先抓重点源，再补开放发现。`;
+    elements.discoverStatus.textContent = buildCollectionStatusText(enabledKeywords, enabledSources);
   }
 
   elements.sourceList.querySelectorAll("[data-source-edit]").forEach((button) => {
@@ -338,7 +331,7 @@ function renderSources() {
 
   elements.sourceList.querySelectorAll("[data-source-delete]").forEach((button) => {
     button.addEventListener("click", () => {
-      deleteSource(Number(button.dataset.sourceDelete)).catch((error) => window.alert(error.message));
+      deleteSource(Number(button.dataset.sourceDelete)).catch(showActionError);
     });
   });
 }
@@ -360,10 +353,10 @@ function renderSelectionSummary() {
 
   elements.selectionSummary.innerHTML = `
     <div class="summary-metrics">
-      <span class="summary-chip ${selectedCount ? "active" : ""}">已选 ${selectedCount}</span>
-      <span class="summary-chip">重点源 ${trackedCount}</span>
-      <span class="summary-chip">开放发现 ${openCount}</span>
-      <span class="summary-chip">编审台 ${queueCount}</span>
+      <span class="summary-chip ${selectedCount ? "active" : ""}">${buildSelectionChipText(FRONTSTAGE_COPY.labels.selectedCount, selectedCount)}</span>
+      <span class="summary-chip">${buildSelectionChipText(FRONTSTAGE_COPY.labels.trackedCount, trackedCount)}</span>
+      <span class="summary-chip">${buildSelectionChipText(FRONTSTAGE_COPY.labels.openCount, openCount)}</span>
+      <span class="summary-chip">${buildSelectionChipText(FRONTSTAGE_COPY.labels.workbenchCount, queueCount)}</span>
     </div>
     <p class="summary-note">${noteText}</p>
   `;
@@ -398,10 +391,10 @@ function renderArticles() {
         const isActive = article.id === appState.selectedArticleId;
         const isSelected = appState.selectedArticleIds.includes(article.id);
         const statusClass = getStatusClass(article);
-        const summary = article.summary || createExcerpt(article.cleanText, 56) || "暂无摘要说明";
-        const publishTime = article.publishTime || article.crawlTime || "";
+        const summary = buildArticleSummaryText(article, 56);
+        const metaTexts = buildArticleMetaLines(article, category?.name);
         const promoteButton = mode === "open" && canPromoteSource(article)
-          ? `<button type="button" class="ghost-button" data-promote-source="${article.id}">转为重点源</button>`
+          ? `<button type="button" class="ghost-button" data-promote-source="${article.id}">${FRONTSTAGE_COPY.actions.promoteSource}</button>`
           : "";
 
         return `
@@ -414,9 +407,8 @@ function renderArticles() {
                 <a class="article-title" href="${escapeHtml(article.originalUrl)}" target="_blank" rel="noreferrer">${escapeHtml(article.originalTitle)}</a>
                 <p class="article-summary list-summary">${escapeHtml(summary)}</p>
                 <div class="meta-row article-meta-row">
-                  <span>${escapeHtml(article.sourceName)}</span>
-                  <span>${escapeHtml(publishTime)}</span>
-                  <span>${category ? escapeHtml(category.name) : "未分配栏目"}</span>
+                  <span>${escapeHtml(metaTexts.primary)}</span>
+                  <span>${escapeHtml(metaTexts.secondary)}</span>
                 </div>
               </div>
               <div class="article-actions compact-article-actions">
@@ -434,15 +426,15 @@ function renderArticles() {
     <div class="content-split-grid">
       <section class="content-subpanel">
         <div class="subpanel-head">
-          <h4>重点源</h4>
-          <span class="pill">抓取源文章 ${trackedArticles.length}</span>
+          <h4>${FRONTSTAGE_COPY.labels.trackedTitle}</h4>
+          <span class="pill">${buildGroupCountLabel("tracked", trackedArticles.length)}</span>
         </div>
         <div class="simple-list article-link-list compact-list">${renderArticleGroup(trackedArticles, "tracked")}</div>
       </section>
       <section class="content-subpanel">
         <div class="subpanel-head">
-          <h4>开放发现</h4>
-          <span class="pill">全网文章 ${openArticles.length}</span>
+          <h4>${FRONTSTAGE_COPY.labels.openTitle}</h4>
+          <span class="pill">${buildGroupCountLabel("open", openArticles.length)}</span>
         </div>
         <div class="simple-list article-link-list compact-list">${renderArticleGroup(openArticles, "open")}</div>
       </section>
@@ -472,7 +464,7 @@ function renderArticles() {
   elements.articleList.querySelectorAll("[data-promote-source]").forEach((node) => {
     node.addEventListener("click", (event) => {
       event.stopPropagation();
-      promoteArticleSource(Number(node.dataset.promoteSource)).catch((error) => window.alert(error.message));
+      promoteArticleSource(Number(node.dataset.promoteSource)).catch(showActionError);
     });
   });
 }
@@ -481,17 +473,19 @@ function renderReviewQueue() {
   const queueArticles = getWorkbenchArticles();
   elements.reviewQueue.innerHTML = queueArticles.length
     ? queueArticles
-      .map((article) => `
-        <article class="simple-item ${article.id === appState.selectedArticleId ? "active" : ""}" data-queue-article="${article.id}">
+      .map((article) => {
+        const metaTexts = buildReviewQueueMetaLines(article);
+        return `
+        <article class="simple-item review-item ${article.id === appState.selectedArticleId ? "active" : ""}" data-queue-article="${article.id}">
           <h4>${escapeHtml(article.newTitle || article.originalTitle)}</h4>
           <div class="meta-row">
-            <span>${escapeHtml(getPortalCategoryTargetName(article))}</span>
-            <span>${escapeHtml(article.status)}</span>
-            <span>${escapeHtml(article.updatedAt || article.createdAt || "")}</span>
+            <span>${escapeHtml(metaTexts.primary)}</span>
+            <span>${escapeHtml(metaTexts.secondary)}</span>
           </div>
-          <p class="note-text">${escapeHtml(article.summary || createExcerpt(article.cleanText, 90) || "尚未修订摘要")}</p>
+          <p class="note-text">${escapeHtml(buildReviewQueueSummaryText(article))}</p>
         </article>
-      `)
+      `;
+      })
       .join("")
     : `<div class="empty-state">${FRONTSTAGE_COPY.empty.reviewQueue}</div>`;
 
@@ -508,20 +502,23 @@ function renderDetail() {
   if (!article) {
     elements.detailEmpty.classList.remove("hidden");
     elements.detailPanel.classList.add("hidden");
-    elements.detailStatus.textContent = "未选择内容";
-    elements.publishResult.textContent = "";
+    elements.detailStatus.textContent = FRONTSTAGE_COPY.status.detailIdle;
+    elements.publishResult.textContent = FRONTSTAGE_COPY.placeholders.publishResultIdle;
+    elements.publishResult.classList.add("is-empty");
+    elements.aiHistory.innerHTML = `<div class="empty-state compact-empty">${FRONTSTAGE_COPY.empty.aiHistory}</div>`;
     elements.keepDuplicateButton.classList.add("hidden");
     return;
   }
 
   elements.detailEmpty.classList.add("hidden");
   elements.detailPanel.classList.remove("hidden");
-  elements.detailStatus.textContent = `${article.status} / ${article.publishStatus}`;
-  elements.detailSource.textContent = `${article.sourceName} / ${getArticleCollectionMode(article)}`;
+  elements.publishResult.classList.remove("is-empty");
+  elements.detailStatus.textContent = buildDetailStatusLabel(article);
+  elements.detailSource.textContent = buildDetailSourceText(article);
   elements.detailUrl.textContent = article.originalUrl;
   elements.detailUrl.href = article.originalUrl;
-  elements.detailTime.textContent = `${article.publishTime} 原文发布时间 / ${article.crawlTime} 抓取时间`;
-  elements.detailSimilarity.textContent = `${article.duplicateStatus} / ${article.similarityScore}%`;
+  elements.detailTime.textContent = buildDetailTimeText(article);
+  elements.detailSimilarity.textContent = buildDetailSimilarityLabel(article);
   elements.originalTitle.textContent = article.originalTitle;
   elements.cleanText.textContent = article.cleanText;
   elements.newTitle.value = article.newTitle || "";
@@ -533,9 +530,14 @@ function renderDetail() {
   elements.sourceNote.value = article.sourceNote || "";
   elements.reviewComment.value = article.reviewComment || "";
   const categoryName = getCategoryName(article.recommendedCategoryId);
-  elements.publishResult.textContent = article.portalUrl
-    ? `已发布到${categoryName}：${article.portalUrl}（主站 ID：${article.portalArticleId}）`
-    : "";
+  elements.publishResult.textContent = buildPublishResultText(article, categoryName) || FRONTSTAGE_COPY.placeholders.publishResultIdle;
+  elements.publishResult.classList.toggle("is-empty", !article.portalUrl);
+  if (elements.aiActionsNote) {
+    elements.aiActionsNote.textContent = buildAiActionNote(categoryName);
+  }
+  if (elements.publishResultNote) {
+    elements.publishResultNote.textContent = buildPublishResultNote(categoryName);
+  }
   syncForwardActionLabels(Number(elements.category.value) || article.recommendedCategoryId);
   elements.keepDuplicateButton.classList.toggle(
     "hidden",
@@ -544,14 +546,24 @@ function renderDetail() {
 
   renderCategoryOptions();
 
-  elements.aiHistory.innerHTML = article.aiHistory
-    .map((item) => `
-      <article class="mini-item">
-        <strong>${escapeHtml(item.type)}</strong>
-        <p>${escapeHtml(item.model)} / ${escapeHtml(item.createdAt)}</p>
-      </article>
-    `)
-    .join("");
+  const aiHistoryItems = Array.isArray(article.aiHistory) ? article.aiHistory : [];
+  elements.aiHistory.innerHTML = aiHistoryItems.length
+    ? aiHistoryItems
+      .map((item) => {
+        const metaText = buildAiHistoryMetaText(item);
+        const excerpt = buildAiHistoryExcerpt(item);
+        return `
+          <article class="history-item">
+            <div class="history-item-head">
+              <strong class="history-item-type">${escapeHtml(item.type || FRONTSTAGE_COPY.common.historyFallbackType)}</strong>
+                    <span class="history-item-meta">${escapeHtml(metaText || FRONTSTAGE_COPY.placeholders.aiHistoryIdle)}</span>
+                  </div>
+                  <p class="history-item-body">${escapeHtml(excerpt || FRONTSTAGE_COPY.notes.aiHistoryResultIdle)}</p>
+                </article>
+        `;
+      })
+      .join("")
+    : `<div class="empty-state compact-empty">${FRONTSTAGE_COPY.empty.aiHistory}</div>`;
 
   const editorDisabled = !isEditorRole();
   const reviewerDisabled = !isReviewerRole();
@@ -635,7 +647,7 @@ function renderPermissions() {
 function formatPublishBoardDay(value) {
   const dateValue = normalizeDateValue(value);
   if (!dateValue) {
-    return "未标注日期";
+    return FRONTSTAGE_COPY.common.undated;
   }
   return dateValue.toISOString().slice(0, 10);
 }
@@ -675,22 +687,24 @@ function renderPublishBoard() {
         <section class="publish-date-group">
           <div class="publish-date-head">
             <h3 class="publish-date-label">${escapeHtml(day)}</h3>
-            <span class="pill">${articles.length} 篇</span>
+            <span class="pill">${articles.length} ${FRONTSTAGE_COPY.labels.articleUnit}</span>
           </div>
           <div class="publish-date-items">
-            ${articles.map((article) => `
+            ${articles.map((article) => {
+              const metaTexts = buildPublishBoardMetaLines(article);
+              return `
               <article class="publish-row">
                 <div class="publish-row-main">
                   <a class="article-title publish-row-title" href="${escapeHtml(article.portalUrl || "#")}" target="_blank" rel="noreferrer">${escapeHtml(article.newTitle || article.originalTitle)}</a>
                   <div class="meta-row publish-row-meta">
-                    <span>${escapeHtml(getPortalCategoryTargetName(article))}</span>
-                    <span>${escapeHtml(article.sourceName)}</span>
-                    <span>${escapeHtml(formatPublishBoardTime(article.updatedAt || article.createdAt || article.publishTime))}</span>
+                    <span>${escapeHtml(metaTexts.primary)}</span>
+                    <span>${escapeHtml(metaTexts.secondary)}</span>
                   </div>
                 </div>
-                <a class="publish-row-link" href="${escapeHtml(article.portalUrl || "#")}" target="_blank" rel="noreferrer">查看</a>
+                <a class="publish-row-link" href="${escapeHtml(article.portalUrl || "#")}" target="_blank" rel="noreferrer">${FRONTSTAGE_COPY.links.view}</a>
               </article>
-            `).join("")}
+            `;
+            }).join("")}
           </div>
         </section>
       `).join("")}
@@ -707,12 +721,11 @@ function renderCollectionStatus() {
   const enabledSourceCount = appState.sourceSites.filter((item) => item.enabled).length;
   const latestTask = appState.tasks[0];
 
-  let text = `已启用 ${enabledKeywordCount} 个关键词，${enabledSourceCount} 个抓取对象。系统先抓重点源，再补开放发现。`;
-  if (latestTask) {
-    text += ` 最近一次采集新增 ${latestTask.successCount} 条，重复 ${latestTask.duplicateCount} 条。`;
-  }
-
-  elements.discoverStatus.textContent = text;
+  elements.discoverStatus.textContent = buildCollectionStatusText(
+    enabledKeywordCount,
+    enabledSourceCount,
+    latestTask
+  );
 }
 
 function refreshData(payload) {

@@ -22,6 +22,14 @@ const RETAIN_SUSPECTED_AFTER_CREATE = process.env.SMOKE_RETAIN_SUSPECTED_AFTER_C
 const CLEANUP_AFTER_RUN = process.env.SMOKE_CLEANUP === "1";
 const TEST_ALL_PORTAL_CATEGORIES = process.env.SMOKE_TEST_ALL_CATEGORIES === "1";
 const TARGET_CATEGORY_ID = Number(process.env.SMOKE_CATEGORY_ID || 2);
+const SHARED_CLEANUP_MARKERS = [
+  "联调源-",
+  "预览测试源-",
+  "case-",
+  "联调发布标题",
+  "联调标签",
+  "联调来源说明"
+];
 const SIMULATED_PORTAL_CATEGORY_TARGETS = {
   1: { name: "行业资讯", pathSegment: "industry" },
   2: { name: "企业资讯", pathSegment: "enterprise" },
@@ -70,6 +78,24 @@ function getArticleByKeyword(articleList, keyword) {
   return (articleList || []).find((item) => Array.isArray(item.hitKeywords) && item.hitKeywords.includes(keyword));
 }
 
+async function cleanupSmokeArtifacts(client, markers) {
+  const matchTexts = Array.from(new Set((markers || []).map((item) => String(item || "").trim()).filter(Boolean)));
+  if (!matchTexts.length) {
+    return null;
+  }
+
+  const cleanupResult = await client.request("/api/testing/cleanup", {
+    method: "POST",
+    body: {
+      matchTexts
+    }
+  });
+
+  assert.strictEqual(cleanupResult.status, 200, "smoke 清理接口执行失败");
+  assert.strictEqual(cleanupResult.payload?.ok, true, "smoke 清理接口未返回成功结果");
+  return cleanupResult.payload;
+}
+
 async function runScenario(targetCategoryId) {
   const portalTarget = SIMULATED_PORTAL_CATEGORY_TARGETS[targetCategoryId] || SIMULATED_PORTAL_CATEGORY_TARGETS[2];
   const adminClient = createSessionClient();
@@ -87,6 +113,8 @@ async function runScenario(targetCategoryId) {
     }
   });
   assert.strictEqual(adminLogin.status, 200, "管理员登录失败");
+
+  await cleanupSmokeArtifacts(adminClient, [...SHARED_CLEANUP_MARKERS, portalTarget.pathSegment]);
 
   const preview = await adminClient.request("/api/sources/preview", {
     method: "POST",
@@ -254,15 +282,7 @@ async function runScenario(targetCategoryId) {
 
   let cleanup = null;
   if (CLEANUP_AFTER_RUN) {
-    const cleanupResult = await adminClient.request("/api/testing/cleanup", {
-      method: "POST",
-      body: {
-        matchText: stamp
-      }
-    });
-    cleanup = cleanupResult.payload;
-    assert.strictEqual(cleanupResult.status, 200, "清理模式执行失败");
-    assert.strictEqual(cleanup?.ok, true, "清理接口未返回成功结果");
+    cleanup = await cleanupSmokeArtifacts(adminClient, [stamp, ...SHARED_CLEANUP_MARKERS, portalTarget.pathSegment]);
   }
 
   return {

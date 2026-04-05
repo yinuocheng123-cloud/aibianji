@@ -31,12 +31,12 @@ async function request(url, options = {}, allowUnauthorized = false) {
     if (!allowUnauthorized) {
       showLogin();
     }
-    throw new Error("请先登录");
+    throw new Error(FRONTSTAGE_COPY.errors.loginRequired);
   }
 
   const result = await response.json().catch(() => ({}));
   if (!response.ok) {
-    throw new Error(result.message || "请求失败");
+    throw new Error(result.message || FRONTSTAGE_COPY.errors.requestFailed);
   }
 
   return result;
@@ -86,7 +86,7 @@ function getCategoryById(categoryId) {
 }
 
 function getCategoryName(categoryId) {
-  return getCategoryById(categoryId)?.name || "行业资讯";
+  return getCategoryById(categoryId)?.name || FRONTSTAGE_COPY.common.defaultCategory;
 }
 
 function isEditorRole() {
@@ -150,7 +150,9 @@ function getTrackedSourceForArticle(article) {
 }
 
 function getArticleCollectionMode(article) {
-  return getTrackedSourceForArticle(article) ? "重点源" : "开放发现";
+  return getTrackedSourceForArticle(article)
+    ? FRONTSTAGE_COPY.common.collectionModeTracked
+    : FRONTSTAGE_COPY.common.collectionModeOpen;
 }
 
 function canPromoteSource(article) {
@@ -168,21 +170,268 @@ function getArticleFreshness(article) {
 }
 
 function getWorkbenchArticles() {
-  const { articleStatus } = getStatusEnums();
   const queueIds = new Set(appState.reviewQueueIds);
+  const { articleStatus } = getStatusEnums();
   const revisedStatuses = new Set([articleStatus.EDITING, articleStatus.PENDING_APPROVAL, articleStatus.APPROVED]);
   return appState.articles
     .filter((article) => queueIds.has(article.id) || revisedStatuses.has(article.status))
     .sort((left, right) => getArticleFreshness(right) - getArticleFreshness(left));
 }
 
+function buildCategoryActionLabel(prefix, categoryName) {
+  return `${prefix}${categoryName}`;
+}
+
+function buildDirectForwardComment(categoryName, isSuspected) {
+  const { templates } = FRONTSTAGE_COPY;
+  return `${templates.directForwardCommentPrefix}${categoryName}${isSuspected
+    ? templates.directForwardCommentSuspectedSuffix
+    : templates.directForwardCommentDefaultSuffix}`;
+}
+
+function buildPublishResultText(article, categoryName) {
+  if (!article.portalUrl) {
+    return "";
+  }
+
+  const { templates } = FRONTSTAGE_COPY;
+  return `${templates.publishResultPrefix}${categoryName} · ${templates.publishResultIdLabel} ${article.portalArticleId} · ${templates.publishResultLinkLabel}`;
+}
+
+function buildAiActionNote(categoryName) {
+  if (!categoryName) {
+    return FRONTSTAGE_COPY.notes.aiActions;
+  }
+  return `${FRONTSTAGE_COPY.notes.aiActions} ${FRONTSTAGE_COPY.templates.currentCategory.replace("{categoryName}", categoryName)}`;
+}
+
+function buildPublishResultNote(categoryName) {
+  if (!categoryName) {
+    return FRONTSTAGE_COPY.notes.publishResult;
+  }
+  return `${FRONTSTAGE_COPY.notes.publishResult} ${FRONTSTAGE_COPY.templates.currentCategory.replace("{categoryName}", categoryName)}`;
+}
+
+function buildAiHistoryMetaText(item) {
+  const metaParts = [item.model, item.createdAt].filter(Boolean);
+  return metaParts.join(" / ");
+}
+
+function buildAiHistoryExcerpt(item) {
+  const candidate = item.outputText || item.output || item.summary || "";
+  return createExcerpt(candidate, 56);
+}
+
+function buildPreviewBodyText(preview, responsePreview) {
+  let bodyText = preview.cleanText || preview.rawText || responsePreview || FRONTSTAGE_COPY.empty.previewBody;
+  if (preview.isFallback && responsePreview && !bodyText.includes(responsePreview)) {
+    bodyText = `${bodyText}\n\n${FRONTSTAGE_COPY.notes.previewResponsePrefix}\n${responsePreview}`;
+  }
+  return bodyText;
+}
+
+function getErrorMessage(error) {
+  return error?.message || FRONTSTAGE_COPY.errors.requestFailed;
+}
+
+function showActionError(error) {
+  window.alert(getErrorMessage(error));
+}
+
+function buildSelectionChipText(label, count) {
+  return `${label} ${count}`;
+}
+
+function buildKeywordMetricText(label, count) {
+  return `${label} ${count}`;
+}
+
+function buildArticleSummaryText(article, limit = 56) {
+  return article.summary || createExcerpt(article.cleanText, limit) || FRONTSTAGE_COPY.common.articleSummaryFallback;
+}
+
+function buildArticleMetaTexts(article, categoryName) {
+  const sourceName = article.sourceName || FRONTSTAGE_COPY.common.unnamedSource;
+  const publishTime = article.publishTime || article.crawlTime || FRONTSTAGE_COPY.common.unknownTime;
+  return {
+    primary: FRONTSTAGE_COPY.templates.articleMetaPrimary
+      .replace("{sourceName}", sourceName)
+      .replace("{publishTime}", publishTime),
+    secondary: categoryName || FRONTSTAGE_COPY.common.unassignedCategory
+  };
+}
+
+function buildGroupCountLabel(mode, count) {
+  const prefix = mode === "tracked"
+    ? FRONTSTAGE_COPY.labels.trackedGroupCount
+    : FRONTSTAGE_COPY.labels.openGroupCount;
+  return `${prefix} ${count}`;
+}
+
+function buildReviewQueueSummaryText(article) {
+  return article.summary || createExcerpt(article.cleanText, 60) || FRONTSTAGE_COPY.common.reviewSummaryFallback;
+}
+
+function buildSourceEnabledText(enabled) {
+  return enabled ? FRONTSTAGE_COPY.common.sourceEnabled : FRONTSTAGE_COPY.common.sourceDisabled;
+}
+
+function buildTaskDuplicateStrategyText(task) {
+  return task.keepSuspectedDuplicates === false
+    ? FRONTSTAGE_COPY.common.taskSkipSuspected
+    : FRONTSTAGE_COPY.common.taskKeepSuspected;
+}
+
+function buildTaskMetricText(label, value) {
+  return `${label} ${value}`;
+}
+
+function buildSessionSummaryText(user) {
+  if (!user) {
+    return FRONTSTAGE_COPY.status.loggedOut;
+  }
+
+  return FRONTSTAGE_COPY.templates.sessionSummary
+    .replace("{displayName}", user.displayName || user.username || "")
+    .replace("{role}", user.role || "");
+}
+
+function buildDetailSourceText(article) {
+  return FRONTSTAGE_COPY.templates.detailSource
+    .replace("{sourceName}", article.sourceName || FRONTSTAGE_COPY.common.unnamedSource)
+    .replace("{collectionMode}", getArticleCollectionMode(article));
+}
+
+function buildArticleMetaLines(article, categoryName) {
+  const sourceName = article.sourceName || FRONTSTAGE_COPY.common.unnamedSource;
+  const publishTime = article.publishTime || article.crawlTime || FRONTSTAGE_COPY.common.unknownTime;
+  return {
+    primary: FRONTSTAGE_COPY.templates.articleMetaPrimary
+      .replace("{sourceName}", sourceName)
+      .replace("{publishTime}", publishTime),
+    secondary: categoryName || FRONTSTAGE_COPY.common.unassignedCategory
+  };
+}
+
+function buildDetailStatusLabel(article) {
+  return FRONTSTAGE_COPY.templates.detailStatus
+    .replace("{articleStatus}", article.status || FRONTSTAGE_COPY.common.unknownError)
+    .replace("{publishStatus}", article.publishStatus || FRONTSTAGE_COPY.common.unknownError);
+}
+
+function buildAiSettingsStatusLabel(settings) {
+  if (!settings) {
+    return FRONTSTAGE_COPY.common.aiSettingsHidden;
+  }
+
+  const keyState = settings.hasApiKey
+    ? FRONTSTAGE_COPY.status.aiSettingsReady
+    : FRONTSTAGE_COPY.status.aiSettingsMissing;
+  return FRONTSTAGE_COPY.templates.aiSettingsStatus
+    .replace("{source}", settings.source || FRONTSTAGE_COPY.common.unknownTitle)
+    .replace("{apiKeyLabel}", FRONTSTAGE_COPY.labels.apiKey)
+    .replace("{keyState}", keyState);
+}
+
+function buildDetailSimilarityLabel(article) {
+  const similarityScore = Number.isFinite(Number(article.similarityScore))
+    ? `${article.similarityScore}%`
+    : "--";
+  return FRONTSTAGE_COPY.templates.detailSimilarity
+    .replace("{duplicateStatus}", article.duplicateStatus || FRONTSTAGE_COPY.common.unknownError)
+    .replace("{similarityScore}", similarityScore);
+}
+
+function buildPublishBoardMetaLines(article) {
+  return {
+    primary: FRONTSTAGE_COPY.templates.publishBoardMetaPrimary
+      .replace("{categoryName}", getPortalCategoryTargetName(article))
+      .replace("{sourceName}", article.sourceName || FRONTSTAGE_COPY.common.unnamedSource),
+    secondary: formatPublishBoardTime(article.updatedAt || article.createdAt || article.publishTime) || FRONTSTAGE_COPY.common.unknownTime
+  };
+}
+
+function buildReviewQueueMetaLines(article) {
+  return {
+    primary: getPortalCategoryTargetName(article),
+    secondary: FRONTSTAGE_COPY.templates.reviewQueueMetaSecondary
+      .replace("{status}", article.status || FRONTSTAGE_COPY.common.unknownError)
+      .replace("{time}", article.updatedAt || article.createdAt || article.publishTime || FRONTSTAGE_COPY.common.unknownTime)
+  };
+}
+
+function buildDetailStatusText(article) {
+  return `${article.status} · ${article.publishStatus}`;
+}
+
+function buildAiSettingsStatusText(settings) {
+  if (!settings) {
+    return FRONTSTAGE_COPY.common.aiSettingsHidden;
+  }
+
+  const keyState = settings.hasApiKey
+    ? FRONTSTAGE_COPY.status.aiSettingsReady
+    : FRONTSTAGE_COPY.status.aiSettingsMissing;
+  return `${settings.source} / ${FRONTSTAGE_COPY.labels.apiKey}：${keyState}`;
+}
+
+function buildDetailTimeText(article) {
+  const publishTime = article.publishTime || FRONTSTAGE_COPY.common.unknownTime;
+  const crawlTime = article.crawlTime || FRONTSTAGE_COPY.common.unknownTime;
+  return FRONTSTAGE_COPY.templates.detailTime
+    .replace("{publishTime}", publishTime)
+    .replace("{crawlTime}", crawlTime);
+}
+
+function buildDetailSimilarityText(article) {
+  const similarityScore = Number.isFinite(Number(article.similarityScore))
+    ? `${article.similarityScore}%`
+    : "--";
+  return `${article.duplicateStatus} · ${similarityScore}`;
+}
+
+function buildPublishBoardMetaTexts(article) {
+  return {
+    primary: `${getPortalCategoryTargetName(article)} · ${article.sourceName || FRONTSTAGE_COPY.common.unnamedSource}`,
+    secondary: formatPublishBoardTime(article.updatedAt || article.createdAt || article.publishTime) || FRONTSTAGE_COPY.common.unknownTime
+  };
+}
+
+function buildReviewQueueMetaTexts(article) {
+  return {
+    primary: getPortalCategoryTargetName(article),
+    secondary: `${article.status} · ${article.updatedAt || article.createdAt || article.publishTime || FRONTSTAGE_COPY.common.unknownTime}`
+  };
+}
+
+function buildCollectionStatusText(enabledKeywordCount, enabledSourceCount, latestTask = null) {
+  const { templates } = FRONTSTAGE_COPY;
+  let text = `${templates.collectionStatusPrefix} ${enabledKeywordCount} ${templates.collectionStatusKeywordUnit}，${enabledSourceCount} ${templates.collectionStatusSourceUnit}。${templates.collectionStatusConnector}`;
+
+  if (latestTask) {
+    text += ` ${templates.collectionStatusRecentPrefix} ${latestTask.successCount} 条，${templates.collectionStatusRecentDuplicate} ${latestTask.duplicateCount} ${templates.collectionStatusRecentUnit}`;
+  }
+
+  return text;
+}
+
+function buildSourceNoteText(sourceName) {
+  return FRONTSTAGE_COPY.templates.sourceNote.replace("{sourceName}", sourceName || FRONTSTAGE_COPY.common.unnamedSource);
+}
+
 function syncForwardActionLabels(categoryId) {
   const categoryName = getCategoryName(categoryId);
   if (elements.directForwardButton) {
-    elements.directForwardButton.textContent = `直接发布到${categoryName}`;
+    elements.directForwardButton.textContent = buildCategoryActionLabel(
+      FRONTSTAGE_COPY.actions.directForwardPrefix,
+      categoryName
+    );
   }
   if (elements.publishButton) {
-    elements.publishButton.textContent = `发布到${categoryName}`;
+    elements.publishButton.textContent = buildCategoryActionLabel(
+      FRONTSTAGE_COPY.actions.publishPrefix,
+      categoryName
+    );
   }
 }
 
@@ -193,7 +442,7 @@ function getStatusEnums() {
 function getStatusFilterOptions() {
   const { articleStatus } = getStatusEnums();
   return [
-    { value: "", label: "全部状态" },
+    { value: "", label: FRONTSTAGE_COPY.templates.filterAllStatus },
     ...STATUS_FILTER_ORDER
       .filter((key) => articleStatus[key])
       .map((key) => ({
@@ -263,7 +512,7 @@ function buildArticleDraftPayload(article, autofill = false) {
   const nextSummary = elements.summary.value.trim() || (autofill ? (article.summary || createExcerpt(article.cleanText, 110)) : "");
   const nextContent = elements.rewrittenContent.value.trim() || (autofill ? (article.rewrittenContent || article.cleanText || "") : "");
   const nextSourceNote = elements.sourceNote.value.trim() || (
-    autofill ? (article.sourceNote || `来源：${article.sourceName}，原文链接与原发布时间已保留。`) : ""
+    autofill ? (article.sourceNote || buildSourceNoteText(article.sourceName)) : ""
   );
   const nextTags = elements.tags.value
     .split(/[，,]/)
@@ -297,7 +546,7 @@ function buildBatchDraftPayload(article) {
     tags: nextTags,
     seoTitle: article.seoTitle || nextTitle,
     seoDescription: article.seoDescription || createExcerpt(nextSummary || nextContent, 90),
-    sourceNote: article.sourceNote || `来源：${article.sourceName}，原文链接与原发布时间已保留。`,
+    sourceNote: article.sourceNote || buildSourceNoteText(article.sourceName),
     recommendedCategoryId: Number(article.recommendedCategoryId) || Number(appState.categories[0]?.id || 1)
   };
 }
@@ -403,26 +652,94 @@ function configureFrontstageLayout() {
   if (elements.submitButton) {
     elements.submitButton.textContent = FRONTSTAGE_COPY.actions.submitReview;
   }
+  if (elements.keepDuplicateButton) {
+    elements.keepDuplicateButton.textContent = FRONTSTAGE_COPY.actions.keepSuspected;
+  }
+  if (elements.approveButton) {
+    elements.approveButton.textContent = FRONTSTAGE_COPY.actions.approve;
+  }
+  if (elements.rejectButton) {
+    elements.rejectButton.textContent = FRONTSTAGE_COPY.actions.reject;
+  }
   if (elements.publishButton) {
     elements.publishButton.textContent = FRONTSTAGE_COPY.actions.publishGeneric;
+  }
+  if (elements.archiveButton) {
+    elements.archiveButton.textContent = FRONTSTAGE_COPY.actions.archive;
   }
 
   if (elements.batchForwardButton) {
     elements.batchForwardButton.textContent = FRONTSTAGE_COPY.actions.batchForward;
   }
+  if (elements.selectAllButton) {
+    elements.selectAllButton.textContent = FRONTSTAGE_COPY.actions.selectAll;
+  }
+  if (elements.clearSelectedButton) {
+    elements.clearSelectedButton.textContent = FRONTSTAGE_COPY.actions.clearSelected;
+  }
 
   if (elements.sendToWorkbenchButton) {
     elements.sendToWorkbenchButton.textContent = FRONTSTAGE_COPY.actions.sendToWorkbench;
+  }
+  if (elements.discoverButton) {
+    elements.discoverButton.textContent = FRONTSTAGE_COPY.actions.discover;
+  }
+  if (elements.saveKeywordButton) {
+    elements.saveKeywordButton.textContent = FRONTSTAGE_COPY.actions.saveKeyword;
+  }
+  if (elements.resetKeywordButton) {
+    elements.resetKeywordButton.textContent = FRONTSTAGE_COPY.actions.resetKeyword;
+  }
+  if (elements.saveSourceButton) {
+    elements.saveSourceButton.textContent = FRONTSTAGE_COPY.actions.saveSource;
+  }
+  if (elements.resetSourceButton) {
+    elements.resetSourceButton.textContent = FRONTSTAGE_COPY.actions.resetSource;
+  }
+  if (elements.previewSourceButton) {
+    elements.previewSourceButton.textContent = FRONTSTAGE_COPY.actions.previewSource;
+  }
+  if (elements.aiActionsNote) {
+    elements.aiActionsNote.textContent = buildAiActionNote(getCategoryName(Number(elements.category?.value)));
+  }
+  if (elements.publishResultNote) {
+    elements.publishResultNote.textContent = buildPublishResultNote(getCategoryName(Number(elements.category?.value)));
   }
 
   const reviewTitle = document.querySelector("#editor-workbench .review-box h3");
   if (reviewTitle) {
     reviewTitle.textContent = FRONTSTAGE_COPY.actions.reviewPanelTitle;
   }
+  if (elements.reviewComment) {
+    elements.reviewComment.placeholder = FRONTSTAGE_COPY.placeholders.reviewComment;
+  }
+  if (elements.publishResult && !elements.publishResult.textContent.trim()) {
+    elements.publishResult.textContent = FRONTSTAGE_COPY.placeholders.publishResultIdle;
+    elements.publishResult.classList.add("is-empty");
+  }
+
+  document.querySelectorAll("[data-ai-action]").forEach((button) => {
+    const action = button.dataset.aiAction;
+    if (action === "summary") {
+      button.textContent = FRONTSTAGE_COPY.actions.aiSummary;
+    }
+    if (action === "title") {
+      button.textContent = FRONTSTAGE_COPY.actions.aiTitle;
+    }
+    if (action === "rewrite") {
+      button.textContent = FRONTSTAGE_COPY.actions.aiRewrite;
+    }
+    if (action === "expand") {
+      button.textContent = FRONTSTAGE_COPY.actions.aiExpand;
+    }
+  });
 
   const publishBoardNote = document.querySelector("#publish-board .section-note");
   if (publishBoardNote) {
     publishBoardNote.textContent = FRONTSTAGE_COPY.notes.publishBoard;
+  }
+  if (elements.aiHistoryNote) {
+    elements.aiHistoryNote.textContent = FRONTSTAGE_COPY.notes.aiHistory;
   }
 
   ensureDirectForwardButton();
@@ -436,7 +753,7 @@ function resetSourceForm() {
   elements.sourceDomain.value = "";
   elements.sourceType.value = "网站";
   elements.sourceEntryUrl.value = "";
-  elements.sourceInterval.value = "每天 09:00";
+  elements.sourceInterval.value = FRONTSTAGE_COPY.common.defaultSourceInterval;
   elements.sourceEnabled.checked = true;
   elements.sourceParseRule.value = "article";
   elements.sourceExcludeRule.value = "";

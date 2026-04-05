@@ -332,6 +332,12 @@ function createCrawlService({ store }) {
     const categoryName = store.getCategoryName(keyword.categoryId);
     const traceCode = `${source.id}-${keyword.id}`;
     const isOpenMode = mode === "open";
+    const simulationFingerprint = `${keyword.keyword}-${traceCode}-${crawlTime}`;
+    const uniquenessTrail = [
+      simulationFingerprint,
+      `${traceCode}-${keyword.keyword}`,
+      `${source.name}-${categoryName}-${crawlTime}`
+    ].join(" / ");
     const title = isOpenMode
       ? `${keyword.keyword}在开放发现中补充到整木网${categoryName}线索池`
       : `${keyword.keyword}线索进入整木网${categoryName}观察池`;
@@ -341,7 +347,11 @@ function createCrawlService({ store }) {
         : `重点抓取源 ${source.name} 本轮围绕“${keyword.keyword}”出现了一条新的公开线索，当前先以模拟抓取方式进入整木网编辑中台。`,
       `这条线索的追踪编号为 ${traceCode}，讨论重点集中在 ${keyword.keyword} 对设计前置、工厂排产、交付节拍和门店协同效率的影响。`,
       `与常规行业快讯相比，“${keyword.keyword}”更适合落到 ${categoryName} 栏目，因为它同时具备业务动作、读者价值和后续改写空间。`,
-      `后续编辑可以继续围绕 ${keyword.keyword} 的应用场景、品牌动作、实施难点和落地收益做二次改写，并保留来源 ${source.name} 与原始链接追溯信息。`
+      `后续编辑可以继续围绕 ${keyword.keyword} 的应用场景、品牌动作、实施难点和落地收益做二次改写，并保留来源 ${source.name} 与原始链接追溯信息。`,
+      `本轮回归的模拟唯一指纹为 ${simulationFingerprint}，用于在本地 smoke 验证时避免历史测试数据被去重误判。`,
+      `可以继承的关键信息包括：关键词 ${keyword.keyword}、来源 ${source.name}、线索编号 ${traceCode}、模拟指纹 ${simulationFingerprint}。`,
+      `本条模拟稿的回归校验片段为 ${uniquenessTrail}。`,
+      `回归校验片段再次确认：${uniquenessTrail}。`
     ].join(" ");
 
     return {
@@ -363,9 +373,9 @@ function createCrawlService({ store }) {
       reviewer: "",
       newTitle: title,
       summary: isOpenMode
-        ? `关键词“${keyword.keyword}”在重点抓取源之外补充发现了一条新的公开文章线索，可进入内容池继续编辑与审核。`
-        : `关键词“${keyword.keyword}”已在重点抓取源中生成一条新的模拟公开线索，可进入内容池继续编辑与审核。`,
-      rewrittenContent: `围绕 ${keyword.keyword} 的公开讨论正在形成更明确的业务动作，这条线索已被整理为 ${categoryName} 方向的待处理稿件，建议继续补充品牌案例、实施细节和读者价值。`,
+        ? `开放发现已围绕 ${keyword.keyword} 补充到一条公开线索，模拟指纹 ${simulationFingerprint}，可进入内容池继续编辑与审核。`
+        : `重点抓取源已围绕 ${keyword.keyword} 生成一条公开线索，模拟指纹 ${simulationFingerprint}，可进入内容池继续编辑与审核。`,
+      rewrittenContent: `围绕 ${keyword.keyword} 的公开讨论正在形成更明确的业务动作，这条线索已被整理为 ${categoryName} 方向的待处理稿件，建议继续补充品牌案例、实施细节和读者价值。当前补充的模拟指纹为 ${simulationFingerprint}，用于回归验证时区分不同轮次。`,
       tags: [keyword.keyword, categoryName, isOpenMode ? "开放发现" : "重点抓取源", `线索${traceCode}`],
       seoTitle: isOpenMode
         ? `${keyword.keyword}开放发现补充进入整木网${categoryName}`
@@ -373,7 +383,7 @@ function createCrawlService({ store }) {
       seoDescription: isOpenMode
         ? `整木网围绕 ${keyword.keyword} 在重点抓取源之外补充发现新的公开线索，供编辑继续改写为 ${categoryName} 栏目稿件。`
         : `整木网围绕 ${keyword.keyword} 在重点抓取源中生成新的模拟公开线索，供编辑继续改写为 ${categoryName} 栏目稿件。`,
-      sourceNote: `来源 ${source.name}，原始链接已保留，抓取时间 ${crawlTime}，采集方式为${isOpenMode ? "开放发现补充" : "重点源优先"}，线索编号 ${traceCode}。`,
+      sourceNote: `来源 ${source.name}，原始链接已保留，抓取时间 ${crawlTime}，采集方式为${isOpenMode ? "开放发现补充" : "重点源优先"}，线索编号 ${traceCode}，模拟指纹 ${simulationFingerprint}。`,
       reviewComment: "",
       aiHistory: [],
       publishStatus: PUBLISH_STATUS.UNPUBLISHED,

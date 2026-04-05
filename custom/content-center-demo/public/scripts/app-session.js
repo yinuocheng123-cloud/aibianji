@@ -17,7 +17,7 @@ function showLogin() {
 }
 
 function showBootError(message) {
-  elements.loginError.textContent = String(message || "页面初始化失败，请重试");
+  elements.loginError.textContent = String(message || FRONTSTAGE_COPY.errors.bootDefault);
   reportClientEvent("boot_error", elements.loginError.textContent);
   showLogin();
 }
@@ -94,7 +94,9 @@ function applyLoginQueryState() {
   }
 
   if (loginError) {
-    elements.loginError.textContent = loginError === "invalid_credentials" ? "用户名或密码错误" : "登录失败，请重试";
+    elements.loginError.textContent = loginError === "invalid_credentials"
+      ? FRONTSTAGE_COPY.errors.invalidCredentials
+      : FRONTSTAGE_COPY.errors.loginFailed;
     showLogin();
     query.delete("login_error");
   }

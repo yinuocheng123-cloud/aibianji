@@ -362,7 +362,6 @@ function createApiRouter({ sessions, store, aiService, crawlService }) {
         sendJson(response, 400, { message: "请完整填写抓取源名称、域名和入口 URL" });
         return;
       }
-
       const state = store.getState();
       if (sourceId) {
         const source = state.sourceSites.find((item) => item.id === sourceId);
@@ -696,32 +695,55 @@ function createApiRouter({ sessions, store, aiService, crawlService }) {
       }
 
       const body = await readRequestBody(request);
-      const matchText = String(body.matchText || "").trim();
-      if (!matchText) {
+      const matchTexts = Array.from(new Set([
+        ...[]
+          .concat(Array.isArray(body.matchTexts) ? body.matchTexts : [])
+          .map((item) => String(item || "").trim())
+          .filter(Boolean),
+        String(body.matchText || "").trim()
+      ].filter(Boolean)));
+      if (!matchTexts.length) {
         sendJson(response, 400, { message: "缺少清理匹配文本" });
         return;
       }
 
+      const matchesAny = (...values) => values.some((value) => (
+        matchTexts.some((matchText) => String(value || "").includes(matchText))
+      ));
+
       const state = store.getState();
       const articleIds = new Set(
         state.articles
-          .filter((article) => [article.originalTitle, article.originalUrl, article.sourceName, ...(article.hitKeywords || []), ...(article.tags || []), article.sourceNote]
-            .some((text) => String(text || "").includes(matchText)))
+          .filter((article) => matchesAny(
+            article.originalTitle,
+            article.newTitle,
+            article.originalUrl,
+            article.sourceName,
+            article.summary,
+            article.cleanText,
+            article.rewrittenContent,
+            article.seoTitle,
+            article.seoDescription,
+            article.reviewComment,
+            ...(article.hitKeywords || []),
+            ...(article.tags || []),
+            article.sourceNote
+          ))
           .map((article) => article.id)
       );
       const sourceIds = new Set(
         state.sourceSites
-          .filter((source) => [source.name, source.domain, source.entryUrl, source.lastResult].some((text) => String(text || "").includes(matchText)))
+          .filter((source) => matchesAny(source.name, source.domain, source.entryUrl, source.lastResult))
           .map((source) => source.id)
       );
       const keywordIds = new Set(
         state.keywords
-          .filter((keyword) => [keyword.keyword, keyword.remark, keyword.excludeWords].some((text) => String(text || "").includes(matchText)))
+          .filter((keyword) => matchesAny(keyword.keyword, keyword.remark, keyword.excludeWords))
           .map((keyword) => keyword.id)
       );
       const taskIds = new Set(
         state.tasks
-          .filter((task) => [task.taskName, task.sourceName, task.logText].some((text) => String(text || "").includes(matchText)))
+          .filter((task) => matchesAny(task.taskName, task.sourceName, task.logText))
           .map((task) => task.id)
       );
 
@@ -754,25 +776,24 @@ function createApiRouter({ sessions, store, aiService, crawlService }) {
         !taskIds.has(failure.taskId)
         && !sourceIds.has(failure.sourceId)
         && !keywordIds.has(failure.keywordId)
-        && !String(failure.sourceName || "").includes(matchText)
-        && !String(failure.keyword || "").includes(matchText)
-        && !String(failure.message || "").includes(matchText)
+        && !matchesAny(failure.sourceName, failure.keyword, failure.message)
       ));
       removed.failures = state.crawlFailures.length - nextFailures.length;
       state.crawlFailures = nextFailures;
 
-      const nextLogs = state.logs.filter((log) => !String(log.message || "").includes(matchText));
+      const nextLogs = state.logs.filter((log) => !matchesAny(log.message));
       removed.logs = state.logs.length - nextLogs.length;
       state.logs = nextLogs;
       store.appendLog(
         LOG_TYPES.CONFIG,
-        `${user.displayName} 清理了本地 smoke 测试数据，共移除 ${removed.sources} 个抓取源、${removed.keywords} 个关键词、${removed.tasks} 个任务、${removed.articles} 篇文章。`
+        `${user.displayName} 清理了本地 smoke 测试数据，匹配文本：${matchTexts.join("、")}。共移除 ${removed.sources} 个抓取源、${removed.keywords} 个关键词、${removed.tasks} 个任务、${removed.articles} 篇文章。`
       );
       store.saveState();
       sendJson(response, 200, {
         ok: true,
         removed,
-        matchText
+        matchText: matchTexts[0],
+        matchTexts
       });
       return;
     }

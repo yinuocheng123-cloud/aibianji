@@ -33,7 +33,7 @@ async function saveSource() {
       domain: derivedDomain || elements.sourceDomain.value.trim(),
       sourceType: elements.sourceType.value,
       entryUrl,
-      crawlInterval: elements.sourceInterval.value.trim() || "每天 09:00",
+      crawlInterval: elements.sourceInterval.value.trim() || FRONTSTAGE_COPY.common.defaultSourceInterval,
       enabled: elements.sourceEnabled.checked,
       parseRule: elements.sourceParseRule.value.trim() || "article",
       excludeRule: elements.sourceExcludeRule.value.trim()
@@ -73,7 +73,7 @@ async function previewSource() {
 
   if (response.status === 401) {
     showLogin();
-    throw new Error("请先登录");
+    throw new Error(FRONTSTAGE_COPY.errors.loginRequired);
   }
 
   const result = await response.json().catch(() => ({}));
@@ -83,7 +83,7 @@ async function previewSource() {
       renderSourcePreview();
       return;
     }
-    throw new Error(result.message || "预览失败");
+    throw new Error(result.message || FRONTSTAGE_COPY.errors.previewFailed);
   }
 
   appState.sourcePreview = result;
@@ -112,7 +112,7 @@ async function saveKeyword() {
 async function toggleKeywordEnabled(keywordId, enabled) {
   const keyword = appState.keywords.find((item) => item.id === Number(keywordId));
   if (!keyword) {
-    throw new Error("未找到要切换的关键词");
+    throw new Error(FRONTSTAGE_COPY.errors.keywordMissing);
   }
 
   const payload = await request("/api/keywords/save", {
@@ -180,7 +180,7 @@ async function runTask() {
 async function runDiscovery() {
   const keywordIds = appState.keywords.filter((item) => item.enabled).map((item) => item.id);
   if (!keywordIds.length) {
-    throw new Error("请先至少启用一个关键词后再开始采集");
+    throw new Error(FRONTSTAGE_COPY.errors.enableKeywordBeforeDiscover);
   }
 
   const payload = await request("/api/tasks/discover", {
@@ -248,10 +248,9 @@ async function forwardArticleById(articleId, options = {}) {
   }
 
   const targetCategoryName = getPortalCategoryTargetName(article);
-  const forwardComment = options.comment || (
+  const forwardComment = options.comment || buildDirectForwardComment(
+    targetCategoryName,
     article.duplicateStatus === getStatusEnums().duplicateStatus.SUSPECTED
-      ? `内容池直接发布到${targetCategoryName}，人工确认保留疑似重复并保留来源信息。`
-      : `内容池直接发布到${targetCategoryName}。`
   );
 
   if (options.useCurrentEditorDraft && isEditorRole()) {
@@ -288,10 +287,9 @@ async function directForwardArticle() {
   const targetCategoryName = getCategoryName(Number(elements.category.value) || article.recommendedCategoryId);
   await forwardArticleById(article.id, {
     useCurrentEditorDraft: true,
-    comment: elements.reviewComment.value.trim() || (
+    comment: elements.reviewComment.value.trim() || buildDirectForwardComment(
+      targetCategoryName,
       article.duplicateStatus === getStatusEnums().duplicateStatus.SUSPECTED
-        ? `内容池直接发布到${targetCategoryName}，人工确认保留疑似重复并保留来源信息。`
-        : `内容池直接发布到${targetCategoryName}。`
     )
   });
 }
@@ -301,7 +299,7 @@ async function batchForwardSelectedArticles() {
   const targetArticles = selectedArticles.length ? selectedArticles : [getSelectedArticle()].filter(Boolean);
 
   if (!targetArticles.length) {
-    throw new Error("请先在内容池中选择至少一篇文章");
+    throw new Error(FRONTSTAGE_COPY.errors.selectAtLeastOneArticle);
   }
 
   for (const article of targetArticles) {
@@ -319,7 +317,7 @@ function sendSelectedToWorkbench() {
     : [appState.selectedArticleId].filter(Boolean);
 
   if (!targetIds.length) {
-    throw new Error("请先在内容池中选择文章");
+    throw new Error(FRONTSTAGE_COPY.errors.selectArticle);
   }
 
   setSelectedArticles(targetIds);
@@ -349,7 +347,7 @@ async function keepSuspectedDuplicate() {
 
   const reason = elements.reviewComment.value.trim();
   if (!reason) {
-    throw new Error("请先填写保留疑似稿理由");
+    throw new Error(FRONTSTAGE_COPY.errors.keepSuspectedReasonRequired);
   }
 
   const payload = await request(`/api/articles/${article.id}/keep-suspected`, {

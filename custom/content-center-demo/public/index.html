@@ -16,7 +16,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>整木网编辑中台 MVP</title>
     <link rel="icon" href="data:," />
-    <link rel="stylesheet" href="/styles.css?v=20260404-v35-front-copy-unify" />
+    <link rel="stylesheet" href="/styles.css?v=20260405-v44-copy-density-pass" />
   </head>
   <body>
     <div id="login-overlay" class="login-overlay">
@@ -230,7 +230,7 @@
           <div class="card-head">
             <div>
               <h2>编审台</h2>
-              <p class="note-text section-note">编审台显示修订文章列表，选中文章后可在线编辑并直接发布到对应栏目。</p>
+              <p class="note-text section-note">编审台显示修订文章列表，可在线编辑后发布到对应栏目。</p>
             </div>
             <span id="detail-status" class="pill">未选择内容</span>
           </div>
@@ -246,7 +246,7 @@
 
             <div class="workbench-detail-panel">
               <div id="detail-empty" class="empty-state">
-                从内容池选择文章并送入编审台后，这里会展示修订内容、AI 辅助和发布动作。
+                从内容池送入后，这里开始修订与发布。
               </div>
 
               <div id="detail-panel" class="detail-panel hidden">
@@ -295,6 +295,7 @@
                     <button data-ai-action="rewrite" type="button">正文改写</button>
                     <button data-ai-action="expand" type="button">扩写稿件</button>
                   </div>
+                  <p id="ai-actions-note" class="note-text section-subnote">先出摘要与标题，再决定是否改写正文。</p>
                 </section>
 
                 <section class="editor-section">
@@ -358,19 +359,23 @@
 
                   <div class="review-box compact-review-box">
                     <h3>编审动作</h3>
-                    <textarea id="review-comment" rows="2" placeholder="填写编审意见、发布备注或保留疑似稿理由"></textarea>
+                    <textarea id="review-comment" rows="2" placeholder="写一句编审意见或发布备注"></textarea>
                     <div class="toolbar compact-actions">
                       <button id="approve-button" class="secondary" type="button">审核通过</button>
                       <button id="reject-button" class="danger" type="button">驳回修改</button>
                       <button id="publish-button" type="button">发布到对应栏目</button>
                       <button id="archive-button" class="secondary" type="button">归档</button>
                     </div>
-                    <div id="publish-result" class="publish-result"></div>
+                    <p id="publish-result-note" class="note-text section-subnote publish-result-note">保存、审核或发布后，这里同步结果。</p>
+                    <div id="publish-result" class="publish-result is-empty">发布后会在这里显示回写结果。</div>
                   </div>
                 </section>
 
                 <div class="history-box compact-history-box">
-                  <h3>AI 与处理记录</h3>
+                  <div class="history-head">
+                    <h3>AI 与处理记录</h3>
+                    <p id="ai-history-note" class="note-text history-note">这里保留 AI 处理与流转记录。</p>
+                  </div>
                   <div id="ai-history" class="mini-list"></div>
                 </div>
               </div>
@@ -417,11 +422,11 @@
       </article>
     </template>
 
-    <script src="/scripts/app-state.js?v=20260404-v35-front-copy-unify"></script>
-    <script src="/scripts/app-session.js?v=20260404-v35-front-copy-unify"></script>
-    <script src="/scripts/app-utils.js?v=20260404-v35-front-copy-unify"></script>
-    <script src="/scripts/app-render.js?v=20260404-v35-front-copy-unify"></script>
-    <script src="/scripts/app-actions.js?v=20260404-v35-front-copy-unify"></script>
-    <script src="/app.js?v=20260404-v35-front-copy-unify"></script>
+    <script src="/scripts/app-state.js?v=20260405-v44-copy-density-pass"></script>
+    <script src="/scripts/app-session.js?v=20260405-v44-copy-density-pass"></script>
+    <script src="/scripts/app-utils.js?v=20260405-v44-copy-density-pass"></script>
+    <script src="/scripts/app-render.js?v=20260405-v44-copy-density-pass"></script>
+    <script src="/scripts/app-actions.js?v=20260405-v44-copy-density-pass"></script>
+    <script src="/app.js?v=20260405-v44-copy-density-pass"></script>
   </body>
 </html>

@@ -18,13 +18,13 @@ async function handleLoginSubmit(event) {
   const submitButton = elements.loginForm.querySelector('button[type="submit"]');
 
   if (!username || !password) {
-    elements.loginError.textContent = "请输入用户名和密码";
+    elements.loginError.textContent = FRONTSTAGE_COPY.errors.loginEmptyCredentials;
     showLogin();
     return;
   }
 
   submitButton.disabled = true;
-  submitButton.textContent = "登录中...";
+  submitButton.textContent = FRONTSTAGE_COPY.actions.loginSubmitting;
 
   try {
     const response = await fetch("/api/auth/login", {
@@ -36,7 +36,7 @@ async function handleLoginSubmit(event) {
 
     const result = await response.json().catch(() => ({}));
     if (!response.ok) {
-      throw new Error(result.message || "登录失败，请重试");
+      throw new Error(result.message || FRONTSTAGE_COPY.errors.loginFailed);
     }
 
     if (result.sessionToken) {
@@ -56,11 +56,11 @@ async function handleLoginSubmit(event) {
     refreshData(result);
   } catch (error) {
     reportClientEvent("login_error", error.message, { username });
-    elements.loginError.textContent = error.message || "登录失败，请重试";
+    elements.loginError.textContent = error.message || FRONTSTAGE_COPY.errors.loginFailed;
     showLogin();
   } finally {
     submitButton.disabled = false;
-    submitButton.textContent = "登录进入中台";
+    submitButton.textContent = FRONTSTAGE_COPY.actions.loginSubmit;
   }
 }
 
@@ -89,35 +89,36 @@ async function logout() {
 
 // ========== 第二部分：事件绑定 ==========
 function bindEvents() {
-  elements.loginForm.addEventListener("submit", handleLoginSubmit);
-  elements.logoutButton.addEventListener("click", () => {
-    logout().catch((error) => window.alert(error.message));
-  });
+  const bindAsyncClick = (element, handler) => {
+    if (!element) {
+      return;
+    }
+    element.addEventListener("click", () => {
+      Promise.resolve()
+        .then(handler)
+        .catch(showActionError);
+    });
+  };
 
-  elements.saveSourceButton.addEventListener("click", () => {
-    saveSource().catch((error) => window.alert(error.message));
-  });
-  elements.previewSourceButton.addEventListener("click", () => {
-    previewSource().catch((error) => window.alert(error.message));
-  });
+  const loginSubmitButton = elements.loginForm.querySelector('button[type="submit"]');
+  if (loginSubmitButton) {
+    loginSubmitButton.textContent = FRONTSTAGE_COPY.actions.loginSubmit;
+  }
+
+  elements.loginForm.addEventListener("submit", handleLoginSubmit);
+  bindAsyncClick(elements.logoutButton, logout);
+  bindAsyncClick(elements.saveSourceButton, saveSource);
+  bindAsyncClick(elements.previewSourceButton, previewSource);
   elements.resetSourceButton.addEventListener("click", resetSourceForm);
 
-  elements.saveKeywordButton.addEventListener("click", () => {
-    saveKeyword().catch((error) => window.alert(error.message));
-  });
+  bindAsyncClick(elements.saveKeywordButton, saveKeyword);
   elements.resetKeywordButton.addEventListener("click", resetKeywordForm);
 
-  elements.saveAiSettingsButton.addEventListener("click", () => {
-    saveAiSettings().catch((error) => window.alert(error.message));
-  });
+  bindAsyncClick(elements.saveAiSettingsButton, saveAiSettings);
 
-  elements.discoverButton.addEventListener("click", () => {
-    runDiscovery().catch((error) => window.alert(error.message));
-  });
+  bindAsyncClick(elements.discoverButton, runDiscovery);
 
-  elements.runTaskButton.addEventListener("click", () => {
-    runTask().catch((error) => window.alert(error.message));
-  });
+  bindAsyncClick(elements.runTaskButton, runTask);
 
   elements.selectAllButton.addEventListener("click", selectAllFilteredArticles);
   elements.clearSelectedButton.addEventListener("click", clearSelectedArticles);
@@ -125,12 +126,10 @@ function bindEvents() {
     try {
       sendSelectedToWorkbench();
     } catch (error) {
-      window.alert(error.message);
+      showActionError(error);
     }
   });
-  elements.batchForwardButton.addEventListener("click", () => {
-    batchForwardSelectedArticles().catch((error) => window.alert(error.message));
-  });
+  bindAsyncClick(elements.batchForwardButton, batchForwardSelectedArticles);
 
   [elements.filterSearch, elements.filterStatus, elements.filterSource, elements.filterKeyword].forEach(bindFilterEvents);
 
@@ -139,37 +138,19 @@ function bindEvents() {
   });
 
   document.querySelectorAll("[data-ai-action]").forEach((button) => {
-    button.addEventListener("click", () => {
-      runAiAction(button.dataset.aiAction).catch((error) => window.alert(error.message));
-    });
+    bindAsyncClick(button, () => runAiAction(button.dataset.aiAction));
   });
 
-  elements.saveButton.addEventListener("click", () => {
-    saveDraft().catch((error) => window.alert(error.message));
-  });
+  bindAsyncClick(elements.saveButton, saveDraft);
   if (elements.directForwardButton) {
-    elements.directForwardButton.addEventListener("click", () => {
-      directForwardArticle().catch((error) => window.alert(error.message));
-    });
+    bindAsyncClick(elements.directForwardButton, directForwardArticle);
   }
-  elements.submitButton.addEventListener("click", () => {
-    submitForReview().catch((error) => window.alert(error.message));
-  });
-  elements.keepDuplicateButton.addEventListener("click", () => {
-    keepSuspectedDuplicate().catch((error) => window.alert(error.message));
-  });
-  elements.approveButton.addEventListener("click", () => {
-    reviewArticle("approve").catch((error) => window.alert(error.message));
-  });
-  elements.rejectButton.addEventListener("click", () => {
-    reviewArticle("reject").catch((error) => window.alert(error.message));
-  });
-  elements.publishButton.addEventListener("click", () => {
-    reviewArticle("publish").catch((error) => window.alert(error.message));
-  });
-  elements.archiveButton.addEventListener("click", () => {
-    reviewArticle("archive").catch((error) => window.alert(error.message));
-  });
+  bindAsyncClick(elements.submitButton, submitForReview);
+  bindAsyncClick(elements.keepDuplicateButton, keepSuspectedDuplicate);
+  bindAsyncClick(elements.approveButton, () => reviewArticle("approve"));
+  bindAsyncClick(elements.rejectButton, () => reviewArticle("reject"));
+  bindAsyncClick(elements.publishButton, () => reviewArticle("publish"));
+  bindAsyncClick(elements.archiveButton, () => reviewArticle("archive"));
 }
 
 // ========== 第三部分：启动与异常处理 ==========
@@ -184,12 +165,12 @@ async function initialize() {
     await loadBootstrap();
   } catch (error) {
     const message = String(error?.message || "");
-    if (message === "请先登录") {
+    if (message === FRONTSTAGE_COPY.errors.loginRequired) {
       elements.loginError.textContent = "";
       showLogin();
       return;
     }
-    showBootError(`初始化失败：${message}`);
+    showBootError(`${FRONTSTAGE_COPY.errors.bootInitPrefix}${message}`);
   }
 }
 
@@ -197,15 +178,15 @@ window.addEventListener("error", (event) => {
   if (!event?.message) {
     return;
   }
-  showBootError(`页面脚本异常：${event.message}`);
+  showBootError(`${FRONTSTAGE_COPY.errors.bootScriptPrefix}${event.message}`);
 });
 
 window.addEventListener("unhandledrejection", (event) => {
   const reason = event?.reason;
   const message = typeof reason === "string"
     ? reason
-    : (reason?.message || "未知错误");
-  showBootError(`页面请求异常：${message}`);
+    : (reason?.message || FRONTSTAGE_COPY.common.unknownError);
+  showBootError(`${FRONTSTAGE_COPY.errors.bootRequestPrefix}${message}`);
 });
 
 initialize();
